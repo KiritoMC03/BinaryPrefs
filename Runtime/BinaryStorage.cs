@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using JetBrains.Annotations;
-using UnityEngine;
 using UnityEngine.Pool;
 
 namespace Appegy.Storage
@@ -55,6 +54,90 @@ namespace Appegy.Storage
         #endregion
 
         #region Public API
+
+        /// <summary> Gets all keys currently stored in the storage. </summary>
+        /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
+        public IReadOnlyCollection<string> Keys
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return _data.Keys;
+            }
+        }
+
+        /// <summary> Gets the value associated with the specified key as an untyped object. </summary>
+        /// <param name="key">The key to get the value for.</param>
+        /// <returns>The value associated with the key, or null if the key does not exist.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
+        [CanBeNull]
+        public virtual object GetRaw(string key)
+        {
+            ThrowIfDisposed();
+            return GetRecord(key)?.Object;
+        }
+
+        /// <summary> Sets the value for the specified key using an untyped object. </summary>
+        /// <param name="key">The key to set the value for.</param>
+        /// <param name="value">The value to set. Its runtime type must be registered in the storage.</param>
+        /// <param name="overrideTypeMismatchBehaviour">Override default behavior when the key already exists with a different type.</param>
+        /// <returns>True if the value was set; otherwise, false.</returns>
+        /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if value is null.</exception>
+        /// <exception cref="IncorrectUsageOfCollectionException">Thrown if the value type is a collection.</exception>
+        /// <exception cref="UnregisteredTypeException">Thrown if the value type is not registered.</exception>
+        /// <exception cref="UnexpectedTypeException">Thrown if the key already exists with a different type and the mismatch behavior is set to throw.</exception>
+        public virtual bool SetRaw(string key, object value, TypeMismatchBehaviour? overrideTypeMismatchBehaviour = null)
+        {
+            ThrowIfDisposed();
+            if (value == null)
+            {
+                throw new ArgumentNullException(nameof(value));
+            }
+
+            var valueType = value.GetType();
+            if (valueType.IsCollection())
+            {
+                throw new IncorrectUsageOfCollectionException(nameof(SetRaw), valueType);
+            }
+
+            var record = GetRecord(key);
+            if (record == null)
+            {
+                AddRawRecord(key, value, valueType);
+                return true;
+            }
+
+            if (record.Type == valueType)
+            {
+                var section = _supportedTypes[record.TypeIndex];
+                if (!section.UpdateRecord(record, value))
+                {
+                    return false;
+                }
+                MarkChanged();
+                OnKeyChanged?.Invoke(key);
+                return true;
+            }
+
+            var mismatchBehaviour = overrideTypeMismatchBehaviour ?? TypeMismatchBehaviour;
+            switch (mismatchBehaviour)
+            {
+                case TypeMismatchBehaviour.OverrideValueAndType:
+                    using (MultipleChangeScope())
+                    {
+                        RemoveRecord(key);
+                        AddRawRecord(key, value, valueType);
+                    }
+                    return true;
+                case TypeMismatchBehaviour.ThrowException:
+                    throw new UnexpectedTypeException(key, nameof(SetRaw), record.Type, valueType);
+                case TypeMismatchBehaviour.Ignore:
+                    return false;
+                default:
+                    throw new UnexpectedEnumException(typeof(TypeMismatchBehaviour), mismatchBehaviour);
+            }
+        }
 
         /// <summary> Determines whether the specified key exists in the storage. </summary>
         /// <param name="key">The key to check for existence.</param>
@@ -361,6 +444,27 @@ namespace Appegy.Storage
             return record;
         }
 
+        /// <summary> Adds a new record with the specified key and untyped value. </summary>
+        /// <param name="key">The key to add the record for.</param>
+        /// <param name="value">The value to add.</param>
+        /// <param name="valueType">The runtime type of the value.</param>
+        /// <exception cref="UnregisteredTypeException">Thrown if the type is not registered.</exception>
+        private void AddRawRecord(string key, object value, Type valueType)
+        {
+            var typeIndex = _supportedTypes.FindIndex(c => c.Type == valueType);
+            if (typeIndex == -1)
+            {
+                throw new UnregisteredTypeException(valueType);
+            }
+
+            var section = _supportedTypes[typeIndex];
+            var record = section.CreateRecord(value, typeIndex);
+            section.Count++;
+            _data.Add(key, record);
+            MarkChanged();
+            OnKeyAdded?.Invoke(key);
+        }
+
         /// <summary> Changes the value of an existing record. </summary>
         /// <typeparam name="T">The type of the value.</typeparam>
         /// <param name="key">The key to change the record for.</param>
@@ -446,7 +550,6 @@ namespace Appegy.Storage
         {
             if (_changeScopeCounter == 0)
             {
-                Debug.LogError($"{nameof(BinaryStorage)}: Unexpected behaviour - MultipleChangeScope counter is already zero");
                 return;
             }
             _changeScopeCounter--;
