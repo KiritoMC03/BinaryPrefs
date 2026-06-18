@@ -106,42 +106,75 @@ namespace Appegy.Storage
             using var stream = new FileStream(storageFilePath, FileMode.Open);
             using var reader = new BinaryReader(stream, Encoding.UTF8);
 
-            // #01 <---> Read package version from the start of the file
-            reader.ReadString();
-
-            // #02 <---> Read and skip reserved 8 bytes
-            reader.ReadInt64();
-
-            // #03 <---> Read used serializers amount
-            var serializersCount = reader.ReadInt32();
-            var orderedSectionsFromFile = new BinarySection[serializersCount];
-            var sectionsNames = new string[serializersCount];
-
-            for (var i = 0; i < serializersCount; i++)
+            int serializersCount;
+            BinarySection[] orderedSectionsFromFile;
+            string[] sectionsNames;
+            int count;
+            try
             {
-                // #04 <---> Read name of type in serializer
-                var serializerName = reader.ReadString();
-                sectionsNames[i] = serializerName;
-                var serializer = sections.FirstOrDefault(c => c.TypeName == serializerName);
-                // orderedSectionsFromFile[i] = serializer ?? throw new UnregisteredTypeException(serializerName);
-                orderedSectionsFromFile[i] = serializer;
+                // #01 <---> Read package version from the start of the file
+                reader.ReadString();
+
+                // #02 <---> Read and skip reserved 8 bytes
+                reader.ReadInt64();
+
+                // #03 <---> Read used serializers amount
+                serializersCount = reader.ReadInt32();
+                if (serializersCount < 0 || serializersCount > stream.Length - stream.Position)
+                {
+                    throw new StorageFileCorruptedException(storageFilePath, $"Invalid serializer count {serializersCount}");
+                }
+                orderedSectionsFromFile = new BinarySection[serializersCount];
+                sectionsNames = new string[serializersCount];
+
+                for (var i = 0; i < serializersCount; i++)
+                {
+                    // #04 <---> Read name of type in serializer
+                    var serializerName = reader.ReadString();
+                    sectionsNames[i] = serializerName;
+                    orderedSectionsFromFile[i] = sections.FirstOrDefault(c => c.TypeName == serializerName);
+                }
+
+                // #05 <---> Read amount of records in storage
+                count = reader.ReadInt32();
+                if (count < 0)
+                {
+                    throw new StorageFileCorruptedException(storageFilePath, $"Invalid record count {count}");
+                }
+            }
+            catch (EndOfStreamException e)
+            {
+                throw new StorageFileCorruptedException(storageFilePath, "Unexpected end of file while reading header", e);
             }
 
-            // #05 <---> Read amount of records in storage
-            var count = reader.ReadInt32();
             for (var i = 0; i < count; i++)
             {
-                // #06 <---> Read key
-                var key = reader.ReadString();
+                string key;
+                int typeIndex;
+                long entrySize;
+                try
+                {
+                    // #06 <---> Read key
+                    key = reader.ReadString();
 
-                // #07 <---> Read type index
-                var typeIndex = reader.ReadInt32();
+                    // #07 <---> Read type index
+                    typeIndex = reader.ReadInt32();
 
-                // #08 <---> Read real size of entry
-                var entrySize = reader.ReadInt64();
+                    // #08 <---> Read real size of entry
+                    entrySize = reader.ReadInt64();
+                }
+                catch (EndOfStreamException e)
+                {
+                    throw new StorageFileCorruptedException(storageFilePath, "Unexpected end of file while reading record header", e);
+                }
                 var position = stream.Position;
 
                 // #09 <---> Read value from stream
+                if (typeIndex < 0 || typeIndex >= orderedSectionsFromFile.Length)
+                {
+                    failedToLoadKey($"Type index {typeIndex} is out of range");
+                    continue;
+                }
                 var section = orderedSectionsFromFile[typeIndex];
                 var index = sections.FindIndex(c => c == section);
                 if (section == null || index == -1)
@@ -149,37 +182,46 @@ namespace Appegy.Storage
                     failedToLoadKey("Unregistered type serializer");
                     continue;
                 }
+
+                Record value;
                 try
                 {
-                    var value = section.ReadFrom(reader, index);
-                    if (stream.Position != position + entrySize)
-                    {
-                        failedToLoadKey($"Read more than expected ({stream.Position - position}b)");
-                    }
-                    else
-                    {
-                        section.Count++;
-                        data.Add(key, value);
-                    }
+                    value = section.ReadFrom(reader, index);
                 }
-                catch (EndOfStreamException e)
+                catch (Exception e)
                 {
-                    failedToLoadKey("End of file stream", e);
+                    failedToLoadKey("Failed to deserialize value", e);
+                    continue;
                 }
+
+                if (stream.Position != position + entrySize)
+                {
+                    failedToLoadKey($"Read more than expected ({stream.Position - position}b)");
+                    continue;
+                }
+
+                if (data.ContainsKey(key))
+                {
+                    throw new StorageFileCorruptedException(storageFilePath, $"Duplicate key '{key}'");
+                }
+
+                section.Count++;
+                data.Add(key, value);
 
                 void failedToLoadKey(string reason, Exception exception = null)
                 {
                     // move stream position to the next record
                     stream.Position = Math.Min(position + entrySize, stream.Length);
 
+                    var typeName = typeIndex >= 0 && typeIndex < sectionsNames.Length ? sectionsNames[typeIndex] : "<unknown>";
                     switch (keyLoadFailedBehaviour)
                     {
                         case KeyLoadFailedBehaviour.ThrowException:
-                            throw exception ?? new KeyLoadFailedException(key, sectionsNames[typeIndex], entrySize, reason);
+                            throw new KeyLoadFailedException(key, typeName, entrySize, reason, exception);
                         case KeyLoadFailedBehaviour.Ignore:
                             break;
                         case KeyLoadFailedBehaviour.IgnoreWithWarning:
-                            Debug.LogWarning($"Failed to load key {key} of type {sectionsNames[typeIndex]} with size {entrySize}b. Reason: {reason}");
+                            Debug.LogWarning($"Failed to load key {key} of type {typeName} with size {entrySize}b. Reason: {reason}");
                             break;
                         default:
                             throw new UnexpectedEnumException(typeof(KeyLoadFailedBehaviour), keyLoadFailedBehaviour);
