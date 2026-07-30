@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 using UnityEngine.Pool;
@@ -125,7 +124,7 @@ namespace Appegy.Storage
             switch (mismatchBehaviour)
             {
                 case TypeMismatchBehaviour.OverrideValueAndType:
-                    using (MultipleChangeScope())
+                    using (new ChangeScope(this))
                     {
                         RemoveRecord(key);
                         AddRawRecord(key, value, valueType);
@@ -170,7 +169,7 @@ namespace Appegy.Storage
         {
             ThrowIfDisposed();
             ThrowIfCollection<T>();
-            return _supportedTypes.Any(c => c is TypedBinarySection<T>);
+            return IndexOfSection<T>() != -1;
         }
 
         /// <summary> Gets the value associated with the specified key. </summary>
@@ -233,7 +232,7 @@ namespace Appegy.Storage
             switch (mismatchBehaviour)
             {
                 case TypeMismatchBehaviour.OverrideValueAndType:
-                    using (MultipleChangeScope())
+                    using (new ChangeScope(this))
                     {
                         RemoveRecord(key);
                         AddRecord(key, value);
@@ -268,8 +267,14 @@ namespace Appegy.Storage
         {
             ThrowIfDisposed();
             var keys = ListPool<string>.Get();
-            keys.AddRange(_data.Keys.Where(predicate));
-            using (MultipleChangeScope())
+            foreach (var key in _data.Keys)
+            {
+                if (predicate(key))
+                {
+                    keys.Add(key);
+                }
+            }
+            using (new ChangeScope(this))
             {
                 foreach (var key in keys)
                 {
@@ -388,7 +393,7 @@ namespace Appegy.Storage
         private bool SupportsCollectionOf<T, TCollection>() where TCollection : IReactiveCollection
         {
             ThrowIfDisposed();
-            return _supportedTypes.Any(c => c is TypedBinarySection<TCollection>);
+            return IndexOfSection<TCollection>() != -1;
         }
 
         /// <summary> Gets the collection associated with the specified key. </summary>
@@ -425,7 +430,7 @@ namespace Appegy.Storage
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         private Record<T> AddRecord<T>(string key, T value)
         {
-            var typeIndex = _supportedTypes.FindIndex(static c => c is TypedBinarySection<T>);
+            var typeIndex = IndexOfSection<T>();
             if (typeIndex == -1)
             {
                 throw new UnregisteredTypeException(typeof(T));
@@ -435,7 +440,8 @@ namespace Appegy.Storage
             var record = new Record<T>(value, typeIndex);
             section.Count++;
             _data.Add(key, record);
-            if (value is IReactiveCollection rc)
+            var rc = record.AsReactiveCollection();
+            if (rc != null)
             {
                 _collections.Add(rc, key);
                 rc.OnChanged += ReactiveCollectionChanged;
@@ -504,7 +510,8 @@ namespace Appegy.Storage
             {
                 return false;
             }
-            if (value.Object is IReactiveCollection rc)
+            var rc = value.AsReactiveCollection();
+            if (rc != null)
             {
                 rc.OnChanged -= ReactiveCollectionChanged;
                 rc.Dispose();
@@ -521,18 +528,23 @@ namespace Appegy.Storage
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         private void RemoveAllRecords()
         {
-            using (MultipleChangeScope())
+            using (new ChangeScope(this))
             {
-                foreach (var rc in _data.Values.Select(c => c.Object).OfType<IReactiveCollection>())
+                foreach (var record in _data.Values)
                 {
+                    var rc = record.AsReactiveCollection();
+                    if (rc == null)
+                    {
+                        continue;
+                    }
                     rc.OnChanged -= ReactiveCollectionChanged;
                     rc.Dispose();
                     _collections.Remove(rc);
                 }
                 _data.Clear();
-                foreach (var section in _supportedTypes)
+                for (var i = 0; i < _supportedTypes.Count; i++)
                 {
-                    section.Count = 0;
+                    _supportedTypes[i].Count = 0;
                 }
                 MarkChanged();
             }
@@ -549,6 +561,18 @@ namespace Appegy.Storage
         private Record GetRecord(string key)
         {
             return _data.GetValueOrDefault(key);
+        }
+
+        private int IndexOfSection<T>()
+        {
+            for (var i = 0; i < _supportedTypes.Count; i++)
+            {
+                if (_supportedTypes[i] is TypedBinarySection<T>)
+                {
+                    return i;
+                }
+            }
+            return -1;
         }
 
         /// <summary>
@@ -608,12 +632,11 @@ namespace Appegy.Storage
         /// <summary> Throws an exception if the specified type is a collection. </summary>
         /// <typeparam name="T">The type to check.</typeparam>
         /// <exception cref="IncorrectUsageOfCollectionException">Thrown if the type is a collection.</exception>
-        private void ThrowIfCollection<T>([CallerMemberName] string action = null)
+        private static void ThrowIfCollection<T>([CallerMemberName] string action = null)
         {
-            var type = typeof(T);
-            if (type.IsCollection())
+            if (CollectionTypeCache<T>.IsCollection)
             {
-                throw new IncorrectUsageOfCollectionException(action, type);
+                throw new IncorrectUsageOfCollectionException(action, typeof(T));
             }
         }
 
@@ -649,8 +672,13 @@ namespace Appegy.Storage
             }
 
             // Always dispose IReactiveCollection instances
-            foreach (var rc in _data.Values.Select(c => c.Object).OfType<IReactiveCollection>())
+            foreach (var record in _data.Values)
             {
+                var rc = record.AsReactiveCollection();
+                if (rc == null)
+                {
+                    continue;
+                }
                 rc.OnChanged -= ReactiveCollectionChanged;
                 rc.Dispose();
                 _collections.Remove(rc);
@@ -663,7 +691,10 @@ namespace Appegy.Storage
             if (disposing)
             {
                 _data.Clear();
-                _supportedTypes.ForEach(static c => c.Count = 0);
+                for (var i = 0; i < _supportedTypes.Count; i++)
+                {
+                    _supportedTypes[i].Count = 0;
+                }
             }
 
             IsDisposed = true;
@@ -685,7 +716,8 @@ namespace Appegy.Storage
             BinaryStorageIO.LoadDataFromDisk(_storageFilePath, _supportedTypes, _data, keyLoadFailedBehaviour);
             foreach (var pair in _data)
             {
-                if (pair.Value.Object is IReactiveCollection rc)
+                var rc = pair.Value.AsReactiveCollection();
+                if (rc != null)
                 {
                     _collections.Add(rc, pair.Key);
                     rc.OnChanged += ReactiveCollectionChanged;

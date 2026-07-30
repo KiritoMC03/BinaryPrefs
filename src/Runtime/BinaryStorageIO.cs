@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using UnityEngine;
 
@@ -134,7 +133,7 @@ namespace Appegy.Storage
                     // #04 <---> Read name of type in serializer
                     var serializerName = reader.ReadString();
                     sectionsNames[i] = serializerName;
-                    orderedSectionsFromFile[i] = sections.FirstOrDefault(c => c.TypeName == serializerName) ?? sections.FirstOrDefault(c => c.FallbackNames.Contains(serializerName));
+                    orderedSectionsFromFile[i] = FindSection(sections, serializerName);
                 }
 
                 // #05 <---> Read amount of records in storage
@@ -178,7 +177,7 @@ namespace Appegy.Storage
                     continue;
                 }
                 var section = orderedSectionsFromFile[typeIndex];
-                var index = sections.FindIndex(c => c == section);
+                var index = IndexOfSection(sections, section);
                 if (section == null || index == -1)
                 {
                     failedToLoadKey("Unregistered type serializer");
@@ -230,6 +229,41 @@ namespace Appegy.Storage
                     }
                 }
             }
+        }
+
+        private static BinarySection FindSection(IReadOnlyList<BinarySection> sections, string typeName)
+        {
+            for (var i = 0; i < sections.Count; i++)
+            {
+                if (sections[i].TypeName == typeName)
+                {
+                    return sections[i];
+                }
+            }
+            for (var i = 0; i < sections.Count; i++)
+            {
+                var fallbackNames = sections[i].FallbackNames;
+                for (var j = 0; j < fallbackNames.Count; j++)
+                {
+                    if (fallbackNames[j] == typeName)
+                    {
+                        return sections[i];
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static int IndexOfSection(IReadOnlyList<BinarySection> sections, BinarySection section)
+        {
+            for (var i = 0; i < sections.Count; i++)
+            {
+                if (sections[i] == section)
+                {
+                    return i;
+                }
+            }
+            return -1;
         }
 
         private static void DeleteFileIfExists(string filePath)

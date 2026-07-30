@@ -1,13 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine.Pool;
 
 namespace Appegy.Storage
 {
     internal class NestedBinaryStorage : IBinaryStorage
     {
+        private const int MinKeysAddedBetweenCleanups = 100;
+
         private readonly IBinaryStorage _root;
         private readonly string _prefix;
+        private readonly Dictionary<string, string> _prefixedKeys = new();
+        private int _keysAddedSinceCleanup;
+        private int _keysAllowedBeforeCleanup = MinKeysAddedBetweenCleanups;
 
         public NestedBinaryStorage(IBinaryStorage root, string prefix)
         {
@@ -28,7 +34,38 @@ namespace Appegy.Storage
 
         private string GetKey(string key)
         {
-            return _prefix + key;
+            if (_prefixedKeys.TryGetValue(key, out var prefixedKey))
+            {
+                return prefixedKey;
+            }
+            if (_keysAddedSinceCleanup >= _keysAllowedBeforeCleanup)
+            {
+                ForgetKeysMissingFromRoot();
+            }
+            prefixedKey = _prefix + key;
+            _prefixedKeys.Add(key, prefixedKey);
+            _keysAddedSinceCleanup++;
+            return prefixedKey;
+        }
+
+        private void ForgetKeysMissingFromRoot()
+        {
+            var missing = ListPool<string>.Get();
+            foreach (var pair in _prefixedKeys)
+            {
+                if (!_root.Has(pair.Value))
+                {
+                    missing.Add(pair.Key);
+                }
+            }
+            foreach (var key in missing)
+            {
+                _prefixedKeys.Remove(key);
+            }
+            ListPool<string>.Release(missing);
+
+            _keysAddedSinceCleanup = 0;
+            _keysAllowedBeforeCleanup = Math.Max(MinKeysAddedBetweenCleanups, _prefixedKeys.Count);
         }
 
         private bool TryExtractKey(string key, out string value)
