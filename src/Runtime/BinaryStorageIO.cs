@@ -8,12 +8,15 @@ namespace Appegy.Storage
 {
     internal static class BinaryStorageIO
     {
+        [ThreadStatic] private static PooledMemoryStream _serializationStream;
+        [ThreadStatic] private static BinaryWriter _serializationWriter;
+
         /// <summary> Save data from memory to disk. </summary>
         /// <param name="storageFilePath"> Path to the storage file </param>
         /// <param name="sections"> List of sections </param>
         /// <param name="data"> Dictionary to store data </param>
         /// <exception cref="IOException"> An I/O error occurred </exception>
-        internal static void SaveDataOnDisk(string storageFilePath, IReadOnlyList<BinarySection> sections, IReadOnlyDictionary<string, Record> data)
+        internal static void SaveDataOnDisk(string storageFilePath, IReadOnlyList<BinarySection> sections, Dictionary<string, Record> data)
         {
             // make sure there is no temp file from previous (most likely failed) save try
             var storageFilePathTmp = storageFilePath + ".tmp";
@@ -33,49 +36,15 @@ namespace Appegy.Storage
                 Directory.CreateDirectory(directoryName);
             }
 
-            using (var stream = new FileStream(storageFilePathTmp, FileMode.Create))
+            var buffer = SerializeToBuffer(sections, data);
+            try
             {
-                using var writer = new BinaryWriter(stream, Encoding.UTF8);
-
-                // #01 <---> Store package version at the start of the file
-                writer.Write(PackageInfo.Version);
-
-                // #02 <---> Reserve 8 bytes for future updates
-                writer.Write(0L);
-
-                // #03 <---> Store amount of used serializers
-                writer.Write(sections.Count);
-                foreach (var section in sections)
-                {
-                    // #04 <---> Write only name of serializer type
-                    writer.Write(section.Count > 0 ? section.TypeName : string.Empty);
-                }
-
-                // #05 <---> Store amount of records in storage
-                writer.Write(data.Count);
-                foreach (var entry in data)
-                {
-                    // #06 <---> Write key
-                    writer.Write(entry.Key);
-
-                    // #07 <---> Write type index
-                    writer.Write(entry.Value.TypeIndex);
-
-                    // #08 <---> Keep space for size (will be calculated later)
-                    var position = writer.BaseStream.Position;
-                    writer.Write(0L);
-
-                    // #09 <---> Write value itself
-                    var start = writer.BaseStream.Position;
-                    var serializer = sections[entry.Value.TypeIndex];
-                    serializer.WriteTo(writer, entry.Value);
-                    var entrySize = writer.BaseStream.Position - start;
-
-                    // #08 <---> Write real size of entry
-                    (position, writer.BaseStream.Position) = (writer.BaseStream.Position, position);
-                    writer.Write(entrySize);
-                    (_, writer.BaseStream.Position) = (writer.BaseStream.Position, position);
-                }
+                using var stream = new FileStream(storageFilePathTmp, FileMode.Create);
+                stream.Write(buffer.GetBuffer(), 0, (int)buffer.Length);
+            }
+            finally
+            {
+                buffer.Release();
             }
 
             if (File.Exists(storageFilePath))
@@ -83,6 +52,73 @@ namespace Appegy.Storage
                 File.Delete(storageFilePath);
             }
             File.Move(storageFilePathTmp, storageFilePath);
+        }
+
+        /// <summary> Serialize data into a pooled in-memory buffer. Caller owns the returned stream and must call <see cref="PooledMemoryStream.Release"/>. </summary>
+        /// <param name="sections"> List of sections </param>
+        /// <param name="data"> Dictionary to store data </param>
+        /// <returns> Stream holding the serialized bytes </returns>
+        internal static PooledMemoryStream SerializeToBuffer(IReadOnlyList<BinarySection> sections, Dictionary<string, Record> data)
+        {
+            _serializationStream ??= new PooledMemoryStream();
+            _serializationWriter ??= new BinaryWriter(_serializationStream, Encoding.UTF8);
+
+            var stream = _serializationStream;
+            stream.Reset();
+            try
+            {
+                WriteData(_serializationWriter, sections, data);
+            }
+            catch
+            {
+                stream.Release();
+                throw;
+            }
+            return stream;
+        }
+
+        private static void WriteData(BinaryWriter writer, IReadOnlyList<BinarySection> sections, Dictionary<string, Record> data)
+        {
+            // #01 <---> Store package version at the start of the file
+            writer.Write(PackageInfo.Version);
+
+            // #02 <---> Reserve 8 bytes for future updates
+            writer.Write(0L);
+
+            // #03 <---> Store amount of used serializers
+            writer.Write(sections.Count);
+            for (var i = 0; i < sections.Count; i++)
+            {
+                // #04 <---> Write only name of serializer type
+                var section = sections[i];
+                writer.Write(section.Count > 0 ? section.TypeName : string.Empty);
+            }
+
+            // #05 <---> Store amount of records in storage
+            writer.Write(data.Count);
+            foreach (var entry in data)
+            {
+                // #06 <---> Write key
+                writer.Write(entry.Key);
+
+                // #07 <---> Write type index
+                writer.Write(entry.Value.TypeIndex);
+
+                // #08 <---> Keep space for size (will be calculated later)
+                var position = writer.BaseStream.Position;
+                writer.Write(0L);
+
+                // #09 <---> Write value itself
+                var start = writer.BaseStream.Position;
+                var serializer = sections[entry.Value.TypeIndex];
+                serializer.WriteTo(writer, entry.Value);
+                var entrySize = writer.BaseStream.Position - start;
+
+                // #08 <---> Write real size of entry
+                (position, writer.BaseStream.Position) = (writer.BaseStream.Position, position);
+                writer.Write(entrySize);
+                (_, writer.BaseStream.Position) = (writer.BaseStream.Position, position);
+            }
         }
 
         /// <summary> Load data from disk to memory. </summary>
