@@ -7,44 +7,17 @@ namespace Appegy.Storage
     internal sealed class PooledMemoryStream : Stream
     {
         private const int MinimumCapacity = 1024;
-        private const int MaximumRememberedCapacity = 1024 * 1024;
 
         private byte[] _buffer = Array.Empty<byte>();
         private int _rememberedCapacity = MinimumCapacity;
         private int _position;
         private int _length;
 
-        public int Capacity => _buffer.Length;
-
-        public byte[] GetBuffer() => _buffer;
-
-        public void Reset()
-        {
-            if (_buffer.Length < _rememberedCapacity)
-            {
-                Release();
-                _buffer = ArrayPool<byte>.Shared.Rent(_rememberedCapacity);
-            }
-            _position = 0;
-            _length = 0;
-        }
-
-        public void Release()
-        {
-            _rememberedCapacity = Math.Clamp(Math.Max(_rememberedCapacity, _length), MinimumCapacity, MaximumRememberedCapacity);
-            if (_buffer.Length > 0)
-            {
-                ArrayPool<byte>.Shared.Return(_buffer);
-                _buffer = Array.Empty<byte>();
-            }
-            _position = 0;
-            _length = 0;
-        }
-
         public override bool CanRead => false;
         public override bool CanSeek => true;
         public override bool CanWrite => true;
         public override long Length => _length;
+        public int Capacity => _buffer.Length;
 
         public override long Position
         {
@@ -57,6 +30,50 @@ namespace Appegy.Storage
                 }
                 _position = (int)value;
             }
+        }
+
+        public void Reset()
+        {
+            if (_buffer.Length < _rememberedCapacity)
+            {
+                ReturnBuffer();
+                _buffer = ArrayPool<byte>.Shared.Rent(_rememberedCapacity);
+            }
+            _position = 0;
+            _length = 0;
+        }
+
+        public void Release()
+        {
+            RememberCapacity();
+            ReturnBuffer();
+            _position = 0;
+            _length = 0;
+        }
+
+        public byte[] Detach(out int length)
+        {
+            RememberCapacity();
+            var detached = _buffer;
+            length = _length;
+            _buffer = Array.Empty<byte>();
+            _position = 0;
+            _length = 0;
+            return detached;
+        }
+
+        private void ReturnBuffer()
+        {
+            if (_buffer.Length > 0)
+            {
+                ArrayPool<byte>.Shared.Return(_buffer);
+                _buffer = Array.Empty<byte>();
+            }
+        }
+
+        private void RememberCapacity()
+        {
+            _rememberedCapacity = Math.Max(_length, MinimumCapacity);
         }
 
         public override void Flush()
@@ -125,10 +142,7 @@ namespace Appegy.Storage
             var doubled = (int)Math.Min((long)_buffer.Length * 2, int.MaxValue);
             var grown = ArrayPool<byte>.Shared.Rent(Math.Max(Math.Max(required, doubled), MinimumCapacity));
             Array.Copy(_buffer, grown, _length);
-            if (_buffer.Length > 0)
-            {
-                ArrayPool<byte>.Shared.Return(_buffer);
-            }
+            ReturnBuffer();
             _buffer = grown;
         }
 

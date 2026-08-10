@@ -33,20 +33,11 @@ namespace Appegy.Storage
         }
 
         /// <summary> Deletes the storage file at the specified path. </summary>
+        /// <remarks> Meant for a path no storage is open on. A storage still alive on this path may write it back from memory afterwards. </remarks>
         /// <param name="storagePath">The path to the storage file.</param>
         internal static void Delete(string storagePath)
         {
-            DeleteIfExists(storagePath);
-            DeleteIfExists(storagePath + BinaryStorageIO.TempFileExtension);
-            DeleteIfExists(storagePath + BinaryStorageIO.BackupFileExtension);
-        }
-
-        private static void DeleteIfExists(string filePath)
-        {
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-            }
+            StorageFile.Of(storagePath).Remove();
         }
 
         /// <summary> Provides a fluent interface for configuring and building a <see cref="BinaryStorage"/> instance. </summary>
@@ -55,6 +46,7 @@ namespace Appegy.Storage
             private readonly string _filePath;
             private readonly List<BinarySection> _serializers = new();
             private bool _autoSave;
+            private bool _saveOnBackgroundThread = true;
             private bool _saveJsonForDebug;
             private MissingKeyBehavior _missingKeyBehavior = MissingKeyBehavior.InitializeWithDefaultValue;
             private TypeMismatchBehaviour _typeMismatchBehaviour = TypeMismatchBehaviour.ThrowException;
@@ -69,6 +61,20 @@ namespace Appegy.Storage
             public Builder EnableAutoSaveOnChange()
             {
                 _autoSave = true;
+                return this;
+            }
+
+            /// <summary> Controls whether saving happens on a background thread. </summary>
+            /// <remarks>
+            /// Enabled by default. Changes are serialized on the calling thread and the file is written on a shared background thread,
+            /// so a change no longer blocks the caller until the data is on disk. <see cref="Save"/> stays blocking in both modes.
+            /// Disable it to get the previous behaviour, where every change writes the file before returning.
+            /// </remarks>
+            /// <param name="enabled">Whether the storage file should be written on a background thread.</param>
+            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            public Builder SaveOnBackgroundThread(bool enabled = true)
+            {
+                _saveOnBackgroundThread = enabled;
                 return this;
             }
 
@@ -246,7 +252,7 @@ namespace Appegy.Storage
             /// <exception cref="KeyLoadFailedException"> A key failed to load and <paramref name="keyLoadFailedBehaviour"/> is <see cref="KeyLoadFailedBehaviour.ThrowException"/>. </exception>
             public BinaryStorage Build(KeyLoadFailedBehaviour keyLoadFailedBehaviour = KeyLoadFailedBehaviour.IgnoreWithWarning)
             {
-                var storage = new BinaryStorage(_filePath, _serializers);
+                var storage = new BinaryStorage(_filePath, _serializers, _saveOnBackgroundThread);
                 storage.AutoSave = _autoSave;
                 storage.SaveJsonCopyForDebug = _saveJsonForDebug;
                 storage.MissingKeyBehavior = _missingKeyBehavior;

@@ -11,17 +11,22 @@ namespace Appegy.Storage
     public partial class BinaryStorage : IDisposable, IBinaryStorage
     {
         private readonly string _storageFilePath;
-        private readonly StorageFilePaths _storageFilePaths;
+        private readonly StoragePersistence _persistence;
         private readonly IReadOnlyList<BinarySection> _supportedTypes;
         private readonly Dictionary<string, Record> _data = new();
         private readonly Dictionary<IReactiveCollection, string> _collections = new();
         private int _changeScopeCounter;
+        private bool _hasUnsavedChanges;
 
         /// <summary> Gets or sets a value indicating whether data should be saved automatically. </summary>
         public bool AutoSave { get; set; }
 
         /// <summary> Gets or sets a value indicating whether a human-readable JSON copy is written next to the binary file on each save. The copy is write-only and never loaded back. </summary>
-        public bool SaveJsonCopyForDebug { get; set; }
+        public bool SaveJsonCopyForDebug
+        {
+            get => _persistence.SaveJsonCopyForDebug;
+            set => _persistence.SaveJsonCopyForDebug = value;
+        }
 
         /// <summary> Gets or sets the behavior when a requested key is not found in the storage. </summary>
         public MissingKeyBehavior MissingKeyBehavior { get; set; } = MissingKeyBehavior.ReturnDefaultValueOnly;
@@ -29,20 +34,18 @@ namespace Appegy.Storage
         /// <summary> Gets or sets the behavior when the type of value associated with a key does not match the expected type. </summary>
         public TypeMismatchBehaviour TypeMismatchBehaviour { get; set; } = TypeMismatchBehaviour.OverrideValueAndType;
 
-        /// <summary> Gets a value indicating whether there are unsaved changes. </summary>
-        public bool IsDirty { get; private set; }
-
         /// <summary> Gets a value indicating whether the storage has been disposed. </summary>
         public bool IsDisposed { get; private set; }
 
         /// <summary> Initializes a new instance of the <see cref="BinaryStorage"/> class. </summary>
         /// <param name="storageFilePath">The file path for storing data.</param>
         /// <param name="supportedTypes">The list of supported types for storage.</param>
-        internal BinaryStorage(string storageFilePath, IReadOnlyList<BinarySection> supportedTypes)
+        /// <param name="saveOnBackgroundThread">Whether the storage file is written on a background thread.</param>
+        internal BinaryStorage(string storageFilePath, IReadOnlyList<BinarySection> supportedTypes, bool saveOnBackgroundThread)
         {
             _storageFilePath = storageFilePath;
-            _storageFilePaths = new StorageFilePaths(storageFilePath);
             _supportedTypes = supportedTypes;
+            _persistence = new StoragePersistence(storageFilePath, supportedTypes, saveOnBackgroundThread);
         }
 
         #region Events
@@ -303,11 +306,11 @@ namespace Appegy.Storage
             return count;
         }
 
-        /// <summary> Saves the current data to disk. </summary>
+        /// <summary> Saves the current data to disk and waits until it is there. </summary>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         public virtual void Save()
         {
-            SaveDataFromDisk();
+            SaveDataOnDisk(true);
         }
 
         /// <summary> Begins a scope for making multiple changes. </summary>
@@ -595,9 +598,9 @@ namespace Appegy.Storage
             {
                 return;
             }
-            if (_changeScopeCounter == 0 && IsDirty && AutoSave)
+            if (_changeScopeCounter == 0 && _hasUnsavedChanges && AutoSave)
             {
-                SaveDataFromDisk();
+                SaveDataOnDisk(false);
             }
         }
 
@@ -618,10 +621,10 @@ namespace Appegy.Storage
         {
             if (!AutoSave || _changeScopeCounter > 0)
             {
-                IsDirty = true;
+                _hasUnsavedChanges = true;
                 return;
             }
-            SaveDataFromDisk();
+            SaveDataOnDisk(false);
         }
 
         /// <summary> Throws an exception if the storage has been disposed. </summary>
@@ -671,9 +674,16 @@ namespace Appegy.Storage
                 return;
             }
 
-            if (disposing && AutoSave && IsDirty)
+            if (disposing)
             {
-                SaveDataFromDisk();
+                if (AutoSave && _hasUnsavedChanges)
+                {
+                    SaveDataOnDisk(true);
+                }
+                else
+                {
+                    _persistence.Flush();
+                }
             }
 
             // Always dispose IReactiveCollection instances
@@ -718,7 +728,7 @@ namespace Appegy.Storage
         private void LoadDataFromDisk(KeyLoadFailedBehaviour keyLoadFailedBehaviour)
         {
             ThrowIfDisposed();
-            BinaryStorageIO.LoadDataFromDisk(_storageFilePaths, _supportedTypes, _data, keyLoadFailedBehaviour);
+            _persistence.Load(_data, keyLoadFailedBehaviour);
             foreach (var pair in _data)
             {
                 var rc = pair.Value.AsReactiveCollection();
@@ -731,24 +741,14 @@ namespace Appegy.Storage
         }
 
         /// <summary> Saves the data from memory to disk. </summary>
+        /// <param name="waitForDisk">Whether to block until the data has actually reached the disk.</param>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="IOException"> An I/O error occurred </exception>
-        private void SaveDataFromDisk()
+        private void SaveDataOnDisk(bool waitForDisk)
         {
             ThrowIfDisposed();
-            BinaryStorageIO.SaveDataOnDisk(_storageFilePaths, _supportedTypes, _data);
-            IsDirty = false;
-            if (SaveJsonCopyForDebug)
-            {
-                try
-                {
-                    BinaryStorageIO.SaveJsonCopyOnDisk(_storageFilePath, _data);
-                }
-                catch (Exception exception)
-                {
-                    UnityEngine.Debug.LogWarning($"Failed to save JSON debug copy of '{_storageFilePath}'. Reason: {exception.Message}");
-                }
-            }
+            _persistence.Save(_data, waitForDisk);
+            _hasUnsavedChanges = false;
         }
 
         #endregion
