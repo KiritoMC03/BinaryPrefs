@@ -12,20 +12,17 @@ namespace Appegy.Storage
         static partial void ThrowIfFilePathLocked(string filePath);
         static partial void UnlockFilePathInEditor(string filePath);
 
-        /// <summary> Creates and configures a new instance of <see cref="BinaryStorage"/> with default settings. </summary>
+        /// <summary> Creates and configures a new instance of <see cref="BinaryStorage" /> with default settings. </summary>
         /// <param name="filePath">The file path for the storage.</param>
-        /// <returns>A configured <see cref="BinaryStorage"/> instance.</returns>
+        /// <returns>A configured <see cref="BinaryStorage" /> instance.</returns>
         public static BinaryStorage Get(string filePath)
         {
-            return Construct(filePath)
-                .AddPrimitiveTypes()
-                .EnableAutoSaveOnChange()
-                .Build();
+            return Construct(filePath).AddPrimitiveTypes().EnableAutoSaveOnChange().Build();
         }
 
-        /// <summary> Begins the construction of a new <see cref="BinaryStorage"/> instance. </summary>
+        /// <summary> Begins the construction of a new <see cref="BinaryStorage" /> instance. </summary>
         /// <param name="filePath">The file path for the storage.</param>
-        /// <returns>A <see cref="Builder"/> for configuring the <see cref="BinaryStorage"/> instance.</returns>
+        /// <returns>A <see cref="Builder" /> for configuring the <see cref="BinaryStorage" /> instance.</returns>
         public static Builder Construct(string filePath)
         {
             ThrowIfFilePathLocked(filePath);
@@ -33,22 +30,25 @@ namespace Appegy.Storage
         }
 
         /// <summary> Deletes the storage file at the specified path. </summary>
-        /// <remarks> Meant for a path no storage is open on. A storage still alive on this path may write it back from memory afterwards. </remarks>
+        /// <remarks>
+        ///     Meant for a path no storage is open on. A storage still alive on this path may write it back from memory
+        ///     afterwards.
+        /// </remarks>
         /// <param name="storagePath">The path to the storage file.</param>
         internal static void Delete(string storagePath)
         {
             StorageFile.Of(storagePath).Remove();
         }
 
-        /// <summary> Provides a fluent interface for configuring and building a <see cref="BinaryStorage"/> instance. </summary>
+        /// <summary> Provides a fluent interface for configuring and building a <see cref="BinaryStorage" /> instance. </summary>
         public class Builder
         {
             private readonly string _filePath;
             private readonly List<BinarySection> _serializers = new();
             private bool _autoSave;
-            private bool _saveOnBackgroundThread = true;
-            private bool _saveJsonForDebug;
             private MissingKeyBehavior _missingKeyBehavior = MissingKeyBehavior.InitializeWithDefaultValue;
+            private bool _saveJsonForDebug;
+            private bool _saveOnBackgroundThread = true;
             private TypeMismatchBehaviour _typeMismatchBehaviour = TypeMismatchBehaviour.ThrowException;
 
             internal Builder(string filePath)
@@ -57,7 +57,7 @@ namespace Appegy.Storage
             }
 
             /// <summary> Enables automatic saving of changes to the storage. </summary>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             public Builder EnableAutoSaveOnChange()
             {
                 _autoSave = true;
@@ -66,12 +66,14 @@ namespace Appegy.Storage
 
             /// <summary> Controls whether saving happens on a background thread. </summary>
             /// <remarks>
-            /// Enabled by default. Changes are serialized on the calling thread and the file is written on a shared background thread,
-            /// so a change no longer blocks the caller until the data is on disk. <see cref="Save"/> stays blocking in both modes.
-            /// Disable it to get the previous behaviour, where every change writes the file before returning.
+            ///     Enabled by default. Changes are serialized on the calling thread and the file is written on a shared background
+            ///     thread,
+            ///     so a change no longer blocks the caller until the data is on disk. <see cref="Save" /> stays blocking in both
+            ///     modes.
+            ///     Disable it to get the previous behaviour, where every change writes the file before returning.
             /// </remarks>
             /// <param name="enabled">Whether the storage file should be written on a background thread.</param>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             public Builder SaveOnBackgroundThread(bool enabled = true)
             {
                 _saveOnBackgroundThread = enabled;
@@ -79,9 +81,13 @@ namespace Appegy.Storage
             }
 
             /// <summary> Enables writing a human-readable JSON copy of the storage next to the binary file for debugging. </summary>
-            /// <remarks> The JSON copy is write-only and never loaded back; the binary file remains the only source of truth. Pass a build-type check (for example, a development-build flag) to toggle it without changing the rest of the configuration. </remarks>
+            /// <remarks>
+            ///     The JSON copy is write-only and never loaded back; the binary file remains the only source of truth. Pass a
+            ///     build-type check (for example, a development-build flag) to toggle it without changing the rest of the
+            ///     configuration.
+            /// </remarks>
             /// <param name="enabled">Whether the JSON debug copy should be written on each save.</param>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             public Builder SaveJsonCopyForDebug(bool enabled = true)
             {
                 _saveJsonForDebug = enabled;
@@ -89,7 +95,7 @@ namespace Appegy.Storage
             }
 
             /// <summary> Specifies the behavior when a requested key is not found in the storage. </summary>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             public Builder SetMissingKeyBehaviour(MissingKeyBehavior behavior)
             {
                 _missingKeyBehavior = behavior;
@@ -98,7 +104,7 @@ namespace Appegy.Storage
 
             /// <summary> Specifies the behavior when the type of value associated with a key does not match the expected type. </summary>
             /// <param name="behavior">The type mismatch behavior.</param>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             public Builder SetTypeMismatchBehaviour(TypeMismatchBehaviour behavior)
             {
                 _typeMismatchBehaviour = behavior;
@@ -106,52 +112,38 @@ namespace Appegy.Storage
             }
 
             /// <summary> Adds serializers for primitive types to the storage configuration. </summary>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             public Builder AddPrimitiveTypes()
             {
-                return AddTypeSerializer(BooleanSerializer.Shared)
-                    .AddTypeSerializer(CharSerializer.Shared)
-                    .AddTypeSerializer(ByteSerializer.Shared)
-                    .AddTypeSerializer(SByteSerializer.Shared)
-                    .AddTypeSerializer(Int16Serializer.Shared)
-                    .AddTypeSerializer(UInt16Serializer.Shared)
-                    .AddTypeSerializer(Int32Serializer.Shared)
-                    .AddTypeSerializer(UInt32Serializer.Shared)
-                    .AddTypeSerializer(Int64Serializer.Shared)
-                    .AddTypeSerializer(UInt64Serializer.Shared)
-                    .AddTypeSerializer(SingleSerializer.Shared)
-                    .AddTypeSerializer(DoubleSerializer.Shared)
-                    .AddTypeSerializer(DecimalSerializer.Shared)
-                    .AddTypeSerializer(StringSerializer.Shared)
-                    .AddTypeSerializer(DateTimeSerializer.Shared)
-                    .AddTypeSerializer(TimeSpanSerializer.Shared)
-                    .AddTypeSerializer(QuaternionSerializer.Shared)
-                    .AddTypeSerializer(Vector2Serializer.Shared)
-                    .AddTypeSerializer(Vector3Serializer.Shared)
-                    .AddTypeSerializer(Vector4Serializer.Shared)
-                    .AddTypeSerializer(Vector2IntSerializer.Shared)
-                    .AddTypeSerializer(Vector3IntSerializer.Shared);
+                return AddTypeSerializer(BooleanSerializer.Shared).AddTypeSerializer(CharSerializer.Shared)
+                    .AddTypeSerializer(ByteSerializer.Shared).AddTypeSerializer(SByteSerializer.Shared)
+                    .AddTypeSerializer(Int16Serializer.Shared).AddTypeSerializer(UInt16Serializer.Shared)
+                    .AddTypeSerializer(Int32Serializer.Shared).AddTypeSerializer(UInt32Serializer.Shared)
+                    .AddTypeSerializer(Int64Serializer.Shared).AddTypeSerializer(UInt64Serializer.Shared)
+                    .AddTypeSerializer(SingleSerializer.Shared).AddTypeSerializer(DoubleSerializer.Shared)
+                    .AddTypeSerializer(DecimalSerializer.Shared).AddTypeSerializer(StringSerializer.Shared)
+                    .AddTypeSerializer(DateTimeSerializer.Shared).AddTypeSerializer(TimeSpanSerializer.Shared)
+                    .AddTypeSerializer(QuaternionSerializer.Shared).AddTypeSerializer(Vector2Serializer.Shared)
+                    .AddTypeSerializer(Vector3Serializer.Shared).AddTypeSerializer(Vector4Serializer.Shared)
+                    .AddTypeSerializer(Vector2IntSerializer.Shared).AddTypeSerializer(Vector3IntSerializer.Shared);
             }
 
             /// <summary> Adds a serializer for a specified type to the storage configuration. </summary>
             /// <typeparam name="T">The type to be serialized.</typeparam>
             /// <param name="typeSerializer">The serializer for the specified type.</param>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             /// <exception cref="DuplicateTypeSerializerException">Thrown if a serializer for the specified type already exists.</exception>
             /// <exception cref="DuplicateTypeSerializerNameException">Thrown if a serializer with the same type name already exists.</exception>
             public Builder AddTypeSerializer<T>(TypeSerializer<T> typeSerializer)
             {
                 var otherSerializer = _serializers.FirstOrDefault(c => c is TypedBinarySection<T>)?.Serializer;
                 if (otherSerializer != null)
-                {
                     throw new DuplicateTypeSerializerException(typeSerializer, otherSerializer, _filePath);
-                }
 
-                otherSerializer = _serializers.FirstOrDefault(c => c.Serializer.TypeName == typeSerializer.TypeName)?.Serializer;
+                otherSerializer = _serializers.FirstOrDefault(c => c.Serializer.TypeName == typeSerializer.TypeName)
+                    ?.Serializer;
                 if (otherSerializer != null)
-                {
                     throw new DuplicateTypeSerializerNameException(typeSerializer, otherSerializer, _filePath);
-                }
 
                 _serializers.Add(new TypedBinarySection<T>(typeSerializer));
                 return this;
@@ -160,7 +152,7 @@ namespace Appegy.Storage
             /// <summary> Adds support for a specified enum type to the storage configuration. </summary>
             /// <typeparam name="T">The enum type to be supported.</typeparam>
             /// <param name="useFullName">Whether to use the full name of the enum type.</param>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             /// <exception cref="UnexpectedUnderlyingEnumTypeException">Thrown if the enum has an unexpected underlying type.</exception>
             public Builder SupportEnum<T>(bool useFullName = false)
                 where T : unmanaged, Enum
@@ -194,6 +186,8 @@ namespace Appegy.Storage
                         AddTypeSerializer(new EnumTypeSerializer<T, ulong>(UInt64Serializer.Shared, useFullName));
                         break;
                     default:
+                        if (underlyingType == null)
+                            throw new NullReferenceException("Underlying type of enum is null");
                         throw new UnexpectedUnderlyingEnumTypeException(enumType, underlyingType);
                 }
                 return this;
@@ -201,28 +195,24 @@ namespace Appegy.Storage
 
             /// <summary> Adds support for lists of a specified type to the storage configuration. </summary>
             /// <typeparam name="T">The type of elements in the list.</typeparam>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             /// <exception cref="CantSupportCollectionOfException">Thrown if the specified type is not supported.</exception>
             public Builder SupportListsOf<T>()
             {
                 if (_serializers.FirstOrDefault(c => c is TypedBinarySection<T>) is not TypedBinarySection<T> section)
-                {
                     throw new CantSupportCollectionOfException(typeof(T));
-                }
 
                 return AddTypeSerializer(new CollectionTypeSerializer<T, ReactiveList<T>>(section.Serializer));
             }
 
             /// <summary> Adds support for sets of a specified type to the storage configuration. </summary>
             /// <typeparam name="T">The type of elements in the set.</typeparam>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             /// <exception cref="CantSupportCollectionOfException">Thrown if the specified type is not supported.</exception>
             public Builder SupportSetsOf<T>()
             {
                 if (_serializers.FirstOrDefault(c => c is TypedBinarySection<T>) is not TypedBinarySection<T> section)
-                {
                     throw new CantSupportCollectionOfException(typeof(T));
-                }
 
                 return AddTypeSerializer(new CollectionTypeSerializer<T, ReactiveSet<T>>(section.Serializer));
             }
@@ -230,27 +220,41 @@ namespace Appegy.Storage
             /// <summary> Adds support for dictionaries of specified key and value types to the storage configuration. </summary>
             /// <typeparam name="TKey">The type of the dictionary keys.</typeparam>
             /// <typeparam name="TValue">The type of the dictionary values.</typeparam>
-            /// <returns>The current <see cref="Builder"/> instance for method chaining.</returns>
+            /// <returns>The current <see cref="Builder" /> instance for method chaining.</returns>
             /// <exception cref="CantSupportCollectionOfException">Thrown if the specified key or value type is not supported.</exception>
             public Builder SupportDictionariesOf<TKey, TValue>()
             {
-                if (_serializers.FirstOrDefault(c => c is TypedBinarySection<TKey>) is not TypedBinarySection<TKey> keySection ||
-                    _serializers.FirstOrDefault(c => c is TypedBinarySection<TValue>) is not TypedBinarySection<TValue> valueSection)
-                {
+                if (_serializers.FirstOrDefault(c => c is TypedBinarySection<TKey>) is not TypedBinarySection<TKey>
+                        keySection
+                 || _serializers.FirstOrDefault(c => c is TypedBinarySection<TValue>) is not TypedBinarySection<TValue>
+                        valueSection)
                     throw new CantSupportCollectionOfException(typeof(KeyValuePair<TKey, TValue>));
-                }
 
-                var kvSerializer = new KeyValueTypeSerializer<TKey, TValue>(keySection.Serializer, valueSection.Serializer);
-                return AddTypeSerializer(new CollectionTypeSerializer<KeyValuePair<TKey, TValue>, ReactiveDictionary<TKey, TValue>>(kvSerializer));
+                var kvSerializer = new KeyValueTypeSerializer<TKey, TValue>(
+                    keySection.Serializer,
+                    valueSection.Serializer
+                );
+                return AddTypeSerializer(
+                    new CollectionTypeSerializer<KeyValuePair<TKey, TValue>, ReactiveDictionary<TKey, TValue>>(
+                        kvSerializer
+                    )
+                );
             }
 
-            /// <summary> Builds and returns the configured <see cref="BinaryStorage"/> instance. </summary>
-            /// <returns>The configured <see cref="BinaryStorage"/> instance.</returns>
+            /// <summary> Builds and returns the configured <see cref="BinaryStorage" /> instance. </summary>
+            /// <returns>The configured <see cref="BinaryStorage" /> instance.</returns>
             /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
             /// <exception cref="IOException"> An I/O error occurred </exception>
-            /// <exception cref="StorageFileCorruptedException"> The storage file structure is corrupted (bad header, truncated framing, or a duplicate key). </exception>
-            /// <exception cref="KeyLoadFailedException"> A key failed to load and <paramref name="keyLoadFailedBehaviour"/> is <see cref="KeyLoadFailedBehaviour.ThrowException"/>. </exception>
-            public BinaryStorage Build(KeyLoadFailedBehaviour keyLoadFailedBehaviour = KeyLoadFailedBehaviour.IgnoreWithWarning)
+            /// <exception cref="StorageFileCorruptedException">
+            ///     The storage file structure is corrupted (bad header, truncated
+            ///     framing, or a duplicate key).
+            /// </exception>
+            /// <exception cref="KeyLoadFailedException">
+            ///     A key failed to load and <paramref name="keyLoadFailedBehaviour" /> is
+            ///     <see cref="KeyLoadFailedBehaviour.ThrowException" />.
+            /// </exception>
+            public BinaryStorage Build
+                (KeyLoadFailedBehaviour keyLoadFailedBehaviour = KeyLoadFailedBehaviour.IgnoreWithWarning)
             {
                 var storage = new BinaryStorage(_filePath, _serializers, _saveOnBackgroundThread);
                 storage.AutoSave = _autoSave;

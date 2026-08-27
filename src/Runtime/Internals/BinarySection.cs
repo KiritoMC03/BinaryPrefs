@@ -2,17 +2,18 @@
 using System.Collections.Generic;
 using System.IO;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal abstract class BinarySection
     {
-        public int Count { get; set; }
-        public TypeSerializer Serializer { get; }
-
         protected BinarySection(TypeSerializer serializer)
         {
             Serializer = serializer;
         }
+
+        public int Count { get; set; }
+        public TypeSerializer Serializer { get; }
 
         /// <summary> Gets the runtime type handled by this section. </summary>
         public abstract Type Type { get; }
@@ -37,27 +38,25 @@ namespace Appegy.Storage
 
     internal class TypedBinarySection<T> : BinarySection
     {
-        private readonly TypeSerializer<T> _serializer;
+        public TypedBinarySection(TypeSerializer<T> serializer) : base(serializer)
+        {
+            Serializer = serializer;
+        }
 
-        public new TypeSerializer<T> Serializer => _serializer;
+        public new TypeSerializer<T> Serializer { get; }
+
         public override Type Type => typeof(T);
         public override string TypeName => Serializer.TypeName;
         public override IReadOnlyList<string> FallbackNames => Serializer.FallbackNames;
 
-        public TypedBinarySection(TypeSerializer<T> serializer)
-            : base(serializer)
-        {
-            _serializer = serializer;
-        }
-
         public override Record ReadFrom(BinaryReader binaryReader, int typeIndex)
         {
-            return new Record<T>(_serializer.ReadFrom(binaryReader), typeIndex);
+            return new Record<T>(Serializer.ReadFrom(binaryReader), typeIndex);
         }
 
         public override void WriteTo(BinaryWriter binaryWriter, Record record)
         {
-            _serializer.WriteTo(binaryWriter, ((Record<T>)record).Value);
+            Serializer.WriteTo(binaryWriter, ((Record<T>)record).Value);
         }
 
         public override Record CreateRecord(object value, int typeIndex)
@@ -68,10 +67,8 @@ namespace Appegy.Storage
         public override bool UpdateRecord(Record record, object value)
         {
             var typedRecord = (Record<T>)record;
-            if (_serializer.Equals(typedRecord.Value, (T)value))
-            {
+            if (Serializer.Equals(typedRecord.Value, (T)value))
                 return false;
-            }
             typedRecord.Value = (T)value;
             return true;
         }

@@ -8,9 +8,6 @@ namespace Appegy.Storage.Serializers
         private readonly TypeSerializer<TKey> _keySerializer;
         private readonly TypeSerializer<TValue> _valueSerializer;
 
-        public override string TypeName { get; }
-        public override IReadOnlyList<string> FallbackNames { get; }
-
         public KeyValueTypeSerializer(TypeSerializer<TKey> keySerializer, TypeSerializer<TValue> valueSerializer)
         {
             _keySerializer = keySerializer;
@@ -18,6 +15,9 @@ namespace Appegy.Storage.Serializers
             TypeName = $"{_keySerializer.TypeName}:{_valueSerializer.TypeName}";
             FallbackNames = new[] { $"{typeof(TKey).Name}:{typeof(TValue).Name}" };
         }
+
+        public override string TypeName { get; }
+        public override IReadOnlyList<string> FallbackNames { get; }
 
         public override bool Equals(KeyValuePair<TKey, TValue> value1, KeyValuePair<TKey, TValue> value2)
         {

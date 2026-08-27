@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal class ReactiveList<T> : IReactiveCollection, IList<T>, IReadOnlyList<T>
@@ -10,19 +11,17 @@ namespace Appegy.Storage
 
         public bool IsDisposed { get; private set; }
 
-        public event Action<IReactiveCollection> OnChanged;
+        public event Action<IReactiveCollection> OnChanged = delegate { };
 
         private void SetDirty()
         {
-            OnChanged?.Invoke(this);
+            OnChanged(this);
         }
 
         private void ThrowIfDisposed()
         {
             if (IsDisposed)
-            {
                 throw new ObjectDisposedException(nameof(ReactiveList<T>));
-            }
         }
 
         #region Mutable functionallity
@@ -30,9 +29,7 @@ namespace Appegy.Storage
         public void Dispose()
         {
             if (IsDisposed)
-            {
                 return;
-            }
             Clear();
             IsDisposed = true;
         }
@@ -52,10 +49,12 @@ namespace Appegy.Storage
             }
         }
 
-        public void Add(T item)
+        public void Add(T? item)
         {
             ThrowIfDisposed();
+#pragma warning disable CS8604 // Possible null reference argument.
             _list.Add(item);
+#pragma warning restore CS8604 // Possible null reference argument.
             SetDirty();
         }
 
@@ -69,21 +68,23 @@ namespace Appegy.Storage
             }
         }
 
-        public bool Remove(T item)
+        public bool Remove(T? item)
         {
             ThrowIfDisposed();
+#pragma warning disable CS8604 // Possible null reference argument.
             var removed = _list.Remove(item);
+#pragma warning restore CS8604 // Possible null reference argument.
             if (removed)
-            {
                 SetDirty();
-            }
             return removed;
         }
 
-        public void Insert(int index, T item)
+        public void Insert(int index, T? item)
         {
             ThrowIfDisposed();
+#pragma warning disable CS8604 // Possible null reference argument.
             _list.Insert(index, item);
+#pragma warning restore CS8604 // Possible null reference argument.
             SetDirty();
         }
 
@@ -102,15 +103,34 @@ namespace Appegy.Storage
 
         public bool IsReadOnly => IsDisposed || ((IList<T>)_list).IsReadOnly;
 
-        public int IndexOf(T item) => _list.IndexOf(item);
+        public int IndexOf(T? item)
+        {
+#pragma warning disable CS8604 // Possible null reference argument.
+            return _list.IndexOf(item);
+#pragma warning restore CS8604 // Possible null reference argument.
+        }
 
-        public IEnumerator<T> GetEnumerator() => _list.GetEnumerator();
+        public IEnumerator<T> GetEnumerator()
+        {
+            return _list.GetEnumerator();
+        }
 
-        IEnumerator IEnumerable.GetEnumerator() => _list.GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return _list.GetEnumerator();
+        }
 
-        public bool Contains(T item) => _list.Contains(item);
+        public bool Contains(T? item)
+        {
+#pragma warning disable CS8604 // Possible null reference argument.
+            return _list.Contains(item);
+#pragma warning restore CS8604 // Possible null reference argument.
+        }
 
-        public void CopyTo(T[] array, int arrayIndex) => _list.CopyTo(array, arrayIndex);
+        public void CopyTo(T[] array, int arrayIndex)
+        {
+            _list.CopyTo(array, arrayIndex);
+        }
 
         #endregion
     }

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
-using JetBrains.Annotations;
+using UnityEngine;
 using UnityEngine.Pool;
 
 namespace Appegy.Storage
@@ -10,18 +10,33 @@ namespace Appegy.Storage
     /// <summary> Manages a binary storage system for saving, retrieving, and managing records of various types. </summary>
     public partial class BinaryStorage : IDisposable, IBinaryStorage
     {
-        private readonly string _storageFilePath;
-        private readonly StoragePersistence _persistence;
-        private readonly IReadOnlyList<BinarySection> _supportedTypes;
-        private readonly Dictionary<string, Record> _data = new();
         private readonly Dictionary<IReactiveCollection, string> _collections = new();
+        private readonly Dictionary<string, Record> _data = new();
+        private readonly StoragePersistence _persistence;
+        private readonly string _storageFilePath;
+        private readonly IReadOnlyList<BinarySection> _supportedTypes;
         private int _changeScopeCounter;
         private bool _hasUnsavedChanges;
+
+        /// <summary> Initializes a new instance of the <see cref="BinaryStorage" /> class. </summary>
+        /// <param name="storageFilePath">The file path for storing data.</param>
+        /// <param name="supportedTypes">The list of supported types for storage.</param>
+        /// <param name="saveOnBackgroundThread">Whether the storage file is written on a background thread.</param>
+        internal BinaryStorage
+            (string storageFilePath, IReadOnlyList<BinarySection> supportedTypes, bool saveOnBackgroundThread)
+        {
+            _storageFilePath = storageFilePath;
+            _supportedTypes = supportedTypes;
+            _persistence = new StoragePersistence(storageFilePath, supportedTypes, saveOnBackgroundThread);
+        }
 
         /// <summary> Gets or sets a value indicating whether data should be saved automatically. </summary>
         public bool AutoSave { get; set; }
 
-        /// <summary> Gets or sets a value indicating whether a human-readable JSON copy is written next to the binary file on each save. The copy is write-only and never loaded back. </summary>
+        /// <summary>
+        ///     Gets or sets a value indicating whether a human-readable JSON copy is written next to the binary file on each
+        ///     save. The copy is write-only and never loaded back.
+        /// </summary>
         public bool SaveJsonCopyForDebug
         {
             get => _persistence.SaveJsonCopyForDebug;
@@ -37,27 +52,16 @@ namespace Appegy.Storage
         /// <summary> Gets a value indicating whether the storage has been disposed. </summary>
         public bool IsDisposed { get; private set; }
 
-        /// <summary> Initializes a new instance of the <see cref="BinaryStorage"/> class. </summary>
-        /// <param name="storageFilePath">The file path for storing data.</param>
-        /// <param name="supportedTypes">The list of supported types for storage.</param>
-        /// <param name="saveOnBackgroundThread">Whether the storage file is written on a background thread.</param>
-        internal BinaryStorage(string storageFilePath, IReadOnlyList<BinarySection> supportedTypes, bool saveOnBackgroundThread)
-        {
-            _storageFilePath = storageFilePath;
-            _supportedTypes = supportedTypes;
-            _persistence = new StoragePersistence(storageFilePath, supportedTypes, saveOnBackgroundThread);
-        }
-
         #region Events
 
         /// <summary> Occurs when a key is added to the storage. </summary>
-        public event Action<string> OnKeyAdded;
+        public event Action<string> OnKeyAdded = delegate { };
 
         /// <summary> Occurs when a key is changed in the storage. </summary>
-        public event Action<string> OnKeyChanged;
+        public event Action<string> OnKeyChanged = delegate { };
 
         /// <summary> Occurs when a key is removed from the storage. </summary>
-        public event Action<string> OnKeyRemoved;
+        public event Action<string> OnKeyRemoved = delegate { };
 
         #endregion
 
@@ -78,8 +82,7 @@ namespace Appegy.Storage
         /// <param name="key">The key to get the value for.</param>
         /// <returns>The value associated with the key, or null if the key does not exist.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
-        [CanBeNull]
-        public virtual object GetRaw(string key)
+        public virtual object? GetRaw(string key)
         {
             ThrowIfDisposed();
             return GetRecord(key)?.Object;
@@ -88,26 +91,29 @@ namespace Appegy.Storage
         /// <summary> Sets the value for the specified key using an untyped object. </summary>
         /// <param name="key">The key to set the value for.</param>
         /// <param name="value">The value to set. Its runtime type must be registered in the storage.</param>
-        /// <param name="overrideTypeMismatchBehaviour">Override default behavior when the key already exists with a different type.</param>
+        /// <param name="overrideTypeMismatchBehaviour">
+        ///     Override default behavior when the key already exists with a different
+        ///     type.
+        /// </param>
         /// <returns>True if the value was set; otherwise, false.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="ArgumentNullException">Thrown if value is null.</exception>
         /// <exception cref="IncorrectUsageOfCollectionException">Thrown if the value type is a collection.</exception>
         /// <exception cref="UnregisteredTypeException">Thrown if the value type is not registered.</exception>
-        /// <exception cref="UnexpectedTypeException">Thrown if the key already exists with a different type and the mismatch behavior is set to throw.</exception>
-        public virtual bool SetRaw(string key, object value, TypeMismatchBehaviour? overrideTypeMismatchBehaviour = null)
+        /// <exception cref="UnexpectedTypeException">
+        ///     Thrown if the key already exists with a different type and the mismatch
+        ///     behavior is set to throw.
+        /// </exception>
+        public virtual bool SetRaw
+            (string key, object value, TypeMismatchBehaviour? overrideTypeMismatchBehaviour = null)
         {
             ThrowIfDisposed();
             if (value == null)
-            {
                 throw new ArgumentNullException(nameof(value));
-            }
 
             var valueType = value.GetType();
             if (valueType.IsCollection())
-            {
                 throw new IncorrectUsageOfCollectionException(nameof(SetRaw), valueType);
-            }
 
             var record = GetRecord(key);
             if (record == null)
@@ -119,12 +125,10 @@ namespace Appegy.Storage
             if (record.Type == valueType)
             {
                 var section = _supportedTypes[record.TypeIndex];
-                if (!section.UpdateRecord(record, value))
-                {
+                if (section == null || !section.UpdateRecord(record, value))
                     return false;
-                }
                 MarkChanged();
-                OnKeyChanged?.Invoke(key);
+                OnKeyChanged(key);
                 return true;
             }
 
@@ -139,7 +143,12 @@ namespace Appegy.Storage
                     }
                     return true;
                 case TypeMismatchBehaviour.ThrowException:
-                    throw new UnexpectedTypeException(key, nameof(SetRaw), record.Type, valueType);
+                    throw new UnexpectedTypeException(
+                        key,
+                        nameof(SetRaw),
+                        record.Type,
+                        valueType
+                    );
                 case TypeMismatchBehaviour.Ignore:
                     return false;
                 default:
@@ -161,11 +170,10 @@ namespace Appegy.Storage
         /// <param name="key">The key to get the type for.</param>
         /// <returns>The type of the value associated with the key, or null if the key does not exist.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
-        [CanBeNull]
-        public virtual Type TypeOf(string key)
+        public virtual Type? TypeOf(string key)
         {
             ThrowIfDisposed();
-            return _data.TryGetValue(key, out var record) ? record.Type : null;
+            return _data.TryGetValue(key, out var record) && record != null ? record.Type : null;
         }
 
         /// <summary> Determines whether the storage supports the specified type. </summary>
@@ -189,8 +197,12 @@ namespace Appegy.Storage
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="IncorrectUsageOfCollectionException">Thrown if the type is a collection.</exception>
         /// <exception cref="UnregisteredTypeException">Thrown if the type is not registered.</exception>
-        /// <exception cref="UnexpectedTypeException">Thrown if the type of the value associated with the key does not match the expected type.</exception>
-        public virtual T Get<T>(string key, T defaultValue = default, MissingKeyBehavior? overrideMissingKeyBehavior = null)
+        /// <exception cref="UnexpectedTypeException">
+        ///     Thrown if the type of the value associated with the key does not match the
+        ///     expected type.
+        /// </exception>
+        public virtual T? Get<T>
+            (string key, T? defaultValue = default(T?), MissingKeyBehavior? overrideMissingKeyBehavior = null)
         {
             ThrowIfDisposed();
             ThrowIfCollection<T>();
@@ -199,13 +211,18 @@ namespace Appegy.Storage
             return record switch
             {
                 Record<T> typedRecord => typedRecord.Value,
-                not null => throw new UnexpectedTypeException(key, nameof(Get), record.Type, typeof(T)),
+                not null => throw new UnexpectedTypeException(
+                    key,
+                    nameof(Get),
+                    record.Type,
+                    typeof(T)
+                ),
                 null => missingKeyBehavior switch
                 {
                     MissingKeyBehavior.InitializeWithDefaultValue => AddRecord(key, defaultValue).Value,
                     MissingKeyBehavior.ReturnDefaultValueOnly => defaultValue,
-                    _ => throw new UnexpectedEnumException(typeof(MissingKeyBehavior), missingKeyBehavior)
-                }
+                    _ => throw new UnexpectedEnumException(typeof(MissingKeyBehavior), missingKeyBehavior),
+                },
             };
         }
 
@@ -213,12 +230,18 @@ namespace Appegy.Storage
         /// <typeparam name="T">The type of the value.</typeparam>
         /// <param name="key">The key to set the value for.</param>
         /// <param name="value">The value to set.</param>
-        /// <param name="overrideTypeMismatchBehaviour">Whether to override the value if the key already exists but with another type.</param>
+        /// <param name="overrideTypeMismatchBehaviour">
+        ///     Whether to override the value if the key already exists but with another
+        ///     type.
+        /// </param>
         /// <returns>True if the value was set; otherwise, false.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="IncorrectUsageOfCollectionException">Thrown if the type is a collection.</exception>
         /// <exception cref="UnregisteredTypeException">Thrown if the type is not registered.</exception>
-        /// <exception cref="UnexpectedTypeException">Thrown if the type of the value associated with the key does not match the expected type.</exception>
+        /// <exception cref="UnexpectedTypeException">
+        ///     Thrown if the type of the value associated with the key does not match the
+        ///     expected type.
+        /// </exception>
         public virtual bool Set<T>(string key, T value, TypeMismatchBehaviour? overrideTypeMismatchBehaviour = null)
         {
             ThrowIfDisposed();
@@ -232,9 +255,7 @@ namespace Appegy.Storage
             }
 
             if (record is Record<T> typedRecord)
-            {
                 return ChangeRecord(key, typedRecord, value);
-            }
 
             var mismatchBehaviour = overrideTypeMismatchBehaviour ?? TypeMismatchBehaviour;
             switch (mismatchBehaviour)
@@ -247,7 +268,12 @@ namespace Appegy.Storage
                     }
                     return true;
                 case TypeMismatchBehaviour.ThrowException:
-                    throw new UnexpectedTypeException(key, nameof(Set), record.Type, typeof(T));
+                    throw new UnexpectedTypeException(
+                        key,
+                        nameof(Set),
+                        record.Type,
+                        typeof(T)
+                    );
                 case TypeMismatchBehaviour.Ignore:
                     return false;
                 default:
@@ -256,7 +282,7 @@ namespace Appegy.Storage
         }
 
         /// <summary>
-        /// Removes the value associated with the specified key.
+        ///     Removes the value associated with the specified key.
         /// </summary>
         /// <param name="key">The key to remove the value for.</param>
         /// <returns>True if the key was removed; otherwise, false.</returns>
@@ -267,27 +293,21 @@ namespace Appegy.Storage
         }
 
         /// <summary>
-        /// Removes values based on a predicate.
+        ///     Removes values based on a predicate.
         /// </summary>
         /// <param name="predicate">The predicate to determine which keys to remove.</param>
         /// <returns>The number of keys removed.</returns>
         public virtual int Remove(Func<string, bool> predicate)
         {
             ThrowIfDisposed();
-            var keys = ListPool<string>.Get();
+            var keys = ListPool<string>.Get() ?? new List<string>(1);
             foreach (var key in _data.Keys)
-            {
                 if (predicate(key))
-                {
                     keys.Add(key);
-                }
-            }
             using (new ChangeScope(this))
             {
                 foreach (var key in keys)
-                {
                     RemoveRecord(key);
-                }
             }
             var removed = keys.Count;
             ListPool<string>.Release(keys);
@@ -295,7 +315,7 @@ namespace Appegy.Storage
         }
 
         /// <summary>
-        /// Removes all values from the storage.
+        ///     Removes all values from the storage.
         /// </summary>
         /// <returns>The number of keys removed.</returns>
         public virtual int RemoveAll()
@@ -329,19 +349,28 @@ namespace Appegy.Storage
         /// <typeparam name="T">The type to check for support.</typeparam>
         /// <returns>True if lists of the type are supported; otherwise, false.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
-        public virtual bool SupportsListsOf<T>() => SupportsCollectionOf<T, ReactiveList<T>>();
+        public virtual bool SupportsListsOf<T>()
+        {
+            return SupportsCollectionOf<T, ReactiveList<T>>();
+        }
 
         /// <summary> Determines whether the storage supports sets of the specified type. </summary>
         /// <typeparam name="T">The type to check for support.</typeparam>
         /// <returns>True if sets of the type are supported; otherwise, false.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
-        public virtual bool SupportsSetsOf<T>() => SupportsCollectionOf<T, ReactiveSet<T>>();
+        public virtual bool SupportsSetsOf<T>()
+        {
+            return SupportsCollectionOf<T, ReactiveSet<T>>();
+        }
 
         /// <summary> Determines whether the storage supports dictionaries of the specified key and value types. </summary>
         /// <typeparam name="TKey">The type of the dictionary keys.</typeparam>
         /// <typeparam name="TValue">The type of the dictionary values.</typeparam>
         /// <returns>True if dictionaries of the key and value types are supported; otherwise, false.</returns>
-        public virtual bool SupportsDictionariesOf<TKey, TValue>() => SupportsCollectionOf<KeyValuePair<TKey, TValue>, ReactiveDictionary<TKey, TValue>>();
+        public virtual bool SupportsDictionariesOf<TKey, TValue>()
+        {
+            return SupportsCollectionOf<KeyValuePair<TKey, TValue>, ReactiveDictionary<TKey, TValue>>();
+        }
 
         /// <summary> Gets the list associated with the specified key. </summary>
         /// <typeparam name="T">The type of the list elements.</typeparam>
@@ -349,7 +378,10 @@ namespace Appegy.Storage
         /// <returns>The list associated with the key.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="UnregisteredTypeException">Thrown if the type is not registered.</exception>
-        public IList<T> GetListOf<T>(string key) => GetCollectionOf<T, ReactiveList<T>>(key);
+        public IList<T> GetListOf<T>(string key)
+        {
+            return GetCollectionOf<T, ReactiveList<T>>(key);
+        }
 
         /// <summary> Gets the read-only list associated with the specified key. </summary>
         /// <typeparam name="T">The type of the list elements.</typeparam>
@@ -357,7 +389,10 @@ namespace Appegy.Storage
         /// <returns>The read-only list associated with the key.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="UnregisteredTypeException">Thrown if the type is not registered.</exception>
-        public IReadOnlyList<T> GetReadOnlyListOf<T>(string key) => GetCollectionOf<T, ReactiveList<T>>(key);
+        public IReadOnlyList<T> GetReadOnlyListOf<T>(string key)
+        {
+            return GetCollectionOf<T, ReactiveList<T>>(key);
+        }
 
         /// <summary> Gets the set associated with the specified key. </summary>
         /// <typeparam name="T">The type of the set elements.</typeparam>
@@ -365,7 +400,10 @@ namespace Appegy.Storage
         /// <returns>The set associated with the key.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="UnregisteredTypeException">Thrown if the type is not registered.</exception>
-        public ISet<T> GetSetOf<T>(string key) => GetCollectionOf<T, ReactiveSet<T>>(key);
+        public ISet<T> GetSetOf<T>(string key)
+        {
+            return GetCollectionOf<T, ReactiveSet<T>>(key);
+        }
 
         /// <summary> Gets the read-only set associated with the specified key. </summary>
         /// <typeparam name="T">The type of the set elements.</typeparam>
@@ -373,7 +411,10 @@ namespace Appegy.Storage
         /// <returns>The read-only set associated with the key.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="UnregisteredTypeException">Thrown if the type is not registered.</exception>
-        public IReadOnlyCollection<T> GetReadOnlySetOf<T>(string key) => GetCollectionOf<T, ReactiveSet<T>>(key);
+        public IReadOnlyCollection<T> GetReadOnlySetOf<T>(string key)
+        {
+            return GetCollectionOf<T, ReactiveSet<T>>(key);
+        }
 
         /// <summary> Gets the dictionary associated with the specified key. </summary>
         /// <typeparam name="TKey">The type of the dictionary keys.</typeparam>
@@ -382,7 +423,10 @@ namespace Appegy.Storage
         /// <returns>The dictionary associated with the key.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="UnregisteredTypeException">Thrown if the type is not registered.</exception>
-        public IDictionary<TKey, TValue> GetDictionaryOf<TKey, TValue>(string key) => GetCollectionOf<KeyValuePair<TKey, TValue>, ReactiveDictionary<TKey, TValue>>(key);
+        public IDictionary<TKey, TValue> GetDictionaryOf<TKey, TValue>(string key)
+        {
+            return GetCollectionOf<KeyValuePair<TKey, TValue>, ReactiveDictionary<TKey, TValue>>(key);
+        }
 
         /// <summary> Gets the read-only dictionary associated with the specified key. </summary>
         /// <typeparam name="TKey">The type of the dictionary keys.</typeparam>
@@ -391,14 +435,18 @@ namespace Appegy.Storage
         /// <returns>The read-only dictionary associated with the key.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="UnregisteredTypeException">Thrown if the type is not registered.</exception>
-        public IReadOnlyDictionary<TKey, TValue> GetReadOnlyDictionaryOf<TKey, TValue>(string key) => GetCollectionOf<KeyValuePair<TKey, TValue>, ReactiveDictionary<TKey, TValue>>(key);
+        public IReadOnlyDictionary<TKey, TValue> GetReadOnlyDictionaryOf<TKey, TValue>(string key)
+        {
+            return GetCollectionOf<KeyValuePair<TKey, TValue>, ReactiveDictionary<TKey, TValue>>(key);
+        }
 
         /// <summary> Determines whether the specified collection type is supported. </summary>
         /// <typeparam name="T">The type of elements in the collection.</typeparam>
         /// <typeparam name="TCollection">The type of the collection.</typeparam>
         /// <returns> <c>true</c> if the specified collection type is supported; otherwise, <c>false</c>. </returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
-        private bool SupportsCollectionOf<T, TCollection>() where TCollection : IReactiveCollection
+        private bool SupportsCollectionOf<T, TCollection>()
+            where TCollection : IReactiveCollection
         {
             ThrowIfDisposed();
             return IndexOfSection<TCollection>() != -1;
@@ -408,18 +456,23 @@ namespace Appegy.Storage
         /// <typeparam name="T">The type of the collection elements.</typeparam>
         /// <typeparam name="TCollection">The type of the collection.</typeparam>
         /// <param name="key">The key to get the collection for.</param>
+        /// <param name="action">Caller name</param>
         /// <returns>The collection associated with the key.</returns>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="UnregisteredTypeException">Thrown if the type is not registered.</exception>
-        private TCollection GetCollectionOf<T, TCollection>(string key, [CallerMemberName] string action = null)
+        private TCollection GetCollectionOf<T, TCollection>
+            (string key, [CallerMemberName] string? action = default(string?))
             where TCollection : ICollection<T>, IReactiveCollection, new()
         {
             ThrowIfDisposed();
             var record = GetRecord(key) ?? AddRecord(key, new TCollection());
             if (record is not Record<TCollection> typedRecord)
-            {
-                throw new UnexpectedTypeException(key, action, record.Type, typeof(TCollection));
-            }
+                throw new UnexpectedTypeException(
+                    key,
+                    action ?? string.Empty,
+                    record.Type,
+                    typeof(TCollection)
+                );
             return typedRecord.Value;
         }
 
@@ -440,11 +493,11 @@ namespace Appegy.Storage
         {
             var typeIndex = IndexOfSection<T>();
             if (typeIndex == -1)
-            {
                 throw new UnregisteredTypeException(typeof(T));
-            }
 
-            var section = (TypedBinarySection<T>)_supportedTypes[typeIndex];
+            if (_supportedTypes[typeIndex] is not TypedBinarySection<T> section)
+                throw new InvalidOperationException($"Type {typeof(T)} is not supported");
+
             var record = new Record<T>(value, typeIndex);
             section.Count++;
             _data.Add(key, record);
@@ -455,7 +508,7 @@ namespace Appegy.Storage
                 rc.OnChanged += ReactiveCollectionChanged;
             }
             MarkChanged();
-            OnKeyAdded?.Invoke(key);
+            OnKeyAdded(key);
             return record;
         }
 
@@ -468,24 +521,23 @@ namespace Appegy.Storage
         {
             var typeIndex = -1;
             for (var i = 0; i < _supportedTypes.Count; i++)
-            {
-                if (_supportedTypes[i].Type == valueType)
+                if (_supportedTypes[i]?.Type == valueType)
                 {
                     typeIndex = i;
                     break;
                 }
-            }
             if (typeIndex == -1)
-            {
                 throw new UnregisteredTypeException(valueType);
-            }
 
             var section = _supportedTypes[typeIndex];
+            if (section == null)
+                throw new InvalidOperationException($"Type {valueType} is not supported");
+
             var record = section.CreateRecord(value, typeIndex);
             section.Count++;
             _data.Add(key, record);
             MarkChanged();
-            OnKeyAdded?.Invoke(key);
+            OnKeyAdded(key);
         }
 
         /// <summary> Changes the value of an existing record. </summary>
@@ -497,13 +549,16 @@ namespace Appegy.Storage
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         private bool ChangeRecord<T>(string key, Record<T> record, T value)
         {
-            var serializer = ((TypedBinarySection<T>)_supportedTypes[record.TypeIndex]).Serializer;
+            if (_supportedTypes[record.TypeIndex] is not TypedBinarySection<T> section)
+                throw new InvalidOperationException($"Type {typeof(T)} is not supported");
+
+            var serializer = section.Serializer;
             var equals = serializer.Equals(record.Value, value);
             if (!equals)
             {
                 record.Value = value;
                 MarkChanged();
-                OnKeyChanged?.Invoke(key);
+                OnKeyChanged(key);
             }
             return !equals;
         }
@@ -514,10 +569,8 @@ namespace Appegy.Storage
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         private bool RemoveRecord(string key)
         {
-            if (!_data.TryGetValue(key, out var value))
-            {
+            if (!_data.TryGetValue(key, out var value) || value == null)
                 return false;
-            }
             var rc = value.AsReactiveCollection();
             if (rc != null)
             {
@@ -525,10 +578,13 @@ namespace Appegy.Storage
                 rc.Dispose();
                 _collections.Remove(rc);
             }
-            _supportedTypes[value.TypeIndex].Count--;
+            var section = _supportedTypes[value.TypeIndex];
+            if (section == null)
+                throw new InvalidOperationException($"Type {value.Type} is not supported");
+            section.Count--;
             _data.Remove(key);
             MarkChanged();
-            OnKeyRemoved?.Invoke(key);
+            OnKeyRemoved(key);
             return true;
         }
 
@@ -542,9 +598,7 @@ namespace Appegy.Storage
                 {
                     var rc = record.AsReactiveCollection();
                     if (rc == null)
-                    {
                         continue;
-                    }
                     rc.OnChanged -= ReactiveCollectionChanged;
                     rc.Dispose();
                     _collections.Remove(rc);
@@ -552,7 +606,11 @@ namespace Appegy.Storage
                 _data.Clear();
                 for (var i = 0; i < _supportedTypes.Count; i++)
                 {
-                    _supportedTypes[i].Count = 0;
+                    var section = _supportedTypes[i];
+                    if (section == null)
+                        throw new InvalidOperationException($"Section at index {i} is not supported (null)");
+
+                    section.Count = 0;
                 }
                 MarkChanged();
             }
@@ -565,8 +623,7 @@ namespace Appegy.Storage
         /// <summary> Gets the record associated with the specified key. </summary>
         /// <param name="key">The key to get the record for.</param>
         /// <returns>The record associated with the key, or null if the key does not exist.</returns>
-        [CanBeNull]
-        private Record GetRecord(string key)
+        private Record? GetRecord(string key)
         {
             return _data.GetValueOrDefault(key);
         }
@@ -574,44 +631,34 @@ namespace Appegy.Storage
         private int IndexOfSection<T>()
         {
             for (var i = 0; i < _supportedTypes.Count; i++)
-            {
                 if (_supportedTypes[i] is TypedBinarySection<T>)
-                {
                     return i;
-                }
-            }
             return -1;
         }
 
         /// <summary>
-        /// Decreases the change scope counter and saves data if necessary.
+        ///     Decreases the change scope counter and saves data if necessary.
         /// </summary>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         private void DecreaseCounter()
         {
             if (_changeScopeCounter == 0)
-            {
                 return;
-            }
             _changeScopeCounter--;
             if (IsDisposed)
-            {
                 return;
-            }
             if (_changeScopeCounter == 0 && _hasUnsavedChanges && AutoSave)
-            {
                 SaveDataOnDisk(false);
-            }
         }
 
         /// <summary> Reacts to a change in a reactive collection. </summary>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         private void ReactiveCollectionChanged(IReactiveCollection collection)
         {
-            if (_collections.TryGetValue(collection, out var key))
+            if (_collections.TryGetValue(collection, out var key) && key != null)
             {
                 MarkChanged();
-                OnKeyChanged?.Invoke(key);
+                OnKeyChanged(key);
             }
         }
 
@@ -629,23 +676,22 @@ namespace Appegy.Storage
 
         /// <summary> Throws an exception if the storage has been disposed. </summary>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
-        private void ThrowIfDisposed([CallerMemberName] string action = null)
+        private void ThrowIfDisposed([CallerMemberName] string? action = null)
         {
             if (IsDisposed)
-            {
-                throw new ObjectDisposedException($"{nameof(BinaryStorage)}: {_storageFilePath}", $"Cannot '{action}' on a disposed storage.");
-            }
+                throw new ObjectDisposedException(
+                    $"{nameof(BinaryStorage)}: {_storageFilePath}",
+                    $"Cannot '{action}' on a disposed storage."
+                );
         }
 
         /// <summary> Throws an exception if the specified type is a collection. </summary>
         /// <typeparam name="T">The type to check.</typeparam>
         /// <exception cref="IncorrectUsageOfCollectionException">Thrown if the type is a collection.</exception>
-        private static void ThrowIfCollection<T>([CallerMemberName] string action = null)
+        private static void ThrowIfCollection<T>([CallerMemberName] string? action = null)
         {
             if (CollectionTypeCache<T>.IsCollection)
-            {
-                throw new IncorrectUsageOfCollectionException(action, typeof(T));
-            }
+                throw new IncorrectUsageOfCollectionException(action ?? string.Empty, typeof(T));
         }
 
         #endregion
@@ -670,20 +716,14 @@ namespace Appegy.Storage
         private void Dispose(bool disposing)
         {
             if (IsDisposed)
-            {
                 return;
-            }
 
             if (disposing)
             {
                 if (AutoSave && _hasUnsavedChanges)
-                {
                     SaveDataOnDisk(true);
-                }
                 else
-                {
                     _persistence.Flush();
-                }
             }
 
             // Always dispose IReactiveCollection instances
@@ -691,24 +731,25 @@ namespace Appegy.Storage
             {
                 var rc = record.AsReactiveCollection();
                 if (rc == null)
-                {
                     continue;
-                }
                 rc.OnChanged -= ReactiveCollectionChanged;
                 rc.Dispose();
                 _collections.Remove(rc);
             }
 
-            OnKeyAdded = null;
-            OnKeyChanged = null;
-            OnKeyRemoved = null;
+            OnKeyAdded = delegate { };
+            OnKeyChanged = delegate { };
+            OnKeyRemoved = delegate { };
 
             if (disposing)
             {
                 _data.Clear();
                 for (var i = 0; i < _supportedTypes.Count; i++)
                 {
-                    _supportedTypes[i].Count = 0;
+                    var section = _supportedTypes[i];
+                    if (section == null)
+                        throw new InvalidOperationException($"Section at index {i} is not supported (null)");
+                    section.Count = 0;
                 }
             }
 
@@ -723,20 +764,40 @@ namespace Appegy.Storage
         /// <summary> Loads the data from disk into memory. </summary>
         /// <exception cref="ObjectDisposedException">Thrown if the storage is disposed.</exception>
         /// <exception cref="IOException"> An I/O error occurred </exception>
-        /// <exception cref="StorageFileCorruptedException"> The file structure is corrupted (bad header, truncated framing, or a duplicate key). </exception>
-        /// <exception cref="KeyLoadFailedException"> A key failed to load and <paramref name="keyLoadFailedBehaviour"/> is <see cref="KeyLoadFailedBehaviour.ThrowException"/>. </exception>
+        /// <exception cref="StorageFileCorruptedException">
+        ///     The file structure is corrupted (bad header, truncated framing, or a
+        ///     duplicate key).
+        /// </exception>
+        /// <exception cref="KeyLoadFailedException">
+        ///     A key failed to load and <paramref name="keyLoadFailedBehaviour" /> is
+        ///     <see cref="KeyLoadFailedBehaviour.ThrowException" />.
+        /// </exception>
         private void LoadDataFromDisk(KeyLoadFailedBehaviour keyLoadFailedBehaviour)
         {
             ThrowIfDisposed();
             _persistence.Load(_data, keyLoadFailedBehaviour);
             foreach (var pair in _data)
             {
+                if (pair.Key == null || pair.Value == null)
+                    switch (keyLoadFailedBehaviour)
+                    {
+                        case KeyLoadFailedBehaviour.ThrowException:
+                            throw new NullReferenceException($"Key:'{pair.Key}'; Value:'{pair.Value}'");
+                        case KeyLoadFailedBehaviour.Ignore:
+                            continue;
+                        case KeyLoadFailedBehaviour.IgnoreWithWarning:
+                            Debug.LogWarning(
+                                $"Unexpected null in binary storage. Key:'{pair.Key}'; Value:'{pair.Value}'"
+                            );
+                            continue;
+                        default:
+                            throw new UnexpectedEnumException(typeof(KeyLoadFailedBehaviour), keyLoadFailedBehaviour);
+                    }
                 var rc = pair.Value.AsReactiveCollection();
-                if (rc != null)
-                {
-                    _collections.Add(rc, pair.Key);
-                    rc.OnChanged += ReactiveCollectionChanged;
-                }
+                if (rc == null)
+                    continue;
+                _collections.Add(rc, pair.Key);
+                rc.OnChanged += ReactiveCollectionChanged;
             }
         }
 

@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using Debug = UnityEngine.Debug;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal sealed class BackgroundStorageWriter : IStorageWriter
@@ -11,14 +12,14 @@ namespace Appegy.Storage
 
         private static readonly BlockingCollection<BackgroundStorageWriter> _scheduled = new();
         private static readonly object _threadLock = new();
-        private static Thread _thread;
+        private static Thread? _thread;
 
         private readonly StorageFile _file;
         private readonly object _lock = new();
+        private bool _isPublishing;
+        private bool _isScheduled;
 
         private StorageSnapshot? _pending;
-        private bool _isScheduled;
-        private bool _isPublishing;
 
         public BackgroundStorageWriter(StorageFile file)
         {
@@ -40,9 +41,7 @@ namespace Appegy.Storage
         {
             var pending = TakePending();
             if (pending != null)
-            {
                 _file.Publish(pending.Value);
-            }
         }
 
         private void Schedule(StorageSnapshot snapshot)
@@ -67,9 +66,7 @@ namespace Appegy.Storage
             lock (_lock)
             {
                 while (_isPublishing)
-                {
                     Monitor.Wait(_lock);
-                }
                 var pending = _pending;
                 _pending = null;
                 return pending;
@@ -83,9 +80,7 @@ namespace Appegy.Storage
             {
                 _isScheduled = false;
                 if (_pending == null)
-                {
                     return;
-                }
                 snapshot = _pending.Value;
                 _pending = null;
                 _isPublishing = true;
@@ -112,20 +107,12 @@ namespace Appegy.Storage
         private static void EnsureThreadStarted()
         {
             if (_thread != null)
-            {
                 return;
-            }
             lock (_threadLock)
             {
                 if (_thread != null)
-                {
                     return;
-                }
-                _thread = new Thread(WriteLoop)
-                {
-                    Name = ThreadName,
-                    IsBackground = true
-                };
+                _thread = new Thread(WriteLoop) { Name = ThreadName, IsBackground = true };
                 _thread.Start();
             }
         }
@@ -133,9 +120,7 @@ namespace Appegy.Storage
         private static void WriteLoop()
         {
             foreach (var writer in _scheduled.GetConsumingEnumerable())
-            {
                 writer.PublishScheduled();
-            }
         }
     }
 }

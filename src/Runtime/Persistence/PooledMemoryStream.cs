@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.IO;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal sealed class PooledMemoryStream : Stream
@@ -9,9 +10,9 @@ namespace Appegy.Storage
         private const int MinimumCapacity = 1024;
 
         private byte[] _buffer = Array.Empty<byte>();
-        private int _rememberedCapacity = MinimumCapacity;
-        private int _position;
         private int _length;
+        private int _position;
+        private int _rememberedCapacity = MinimumCapacity;
 
         public override bool CanRead => false;
         public override bool CanSeek => true;
@@ -25,9 +26,11 @@ namespace Appegy.Storage
             set
             {
                 if (value < 0 || value > _length)
-                {
-                    throw new ArgumentOutOfRangeException(nameof(value), value, $"Position must be within [0, {_length}].");
-                }
+                    throw new ArgumentOutOfRangeException(
+                        nameof(value),
+                        value,
+                        $"Position must be within [0, {_length}]."
+                    );
                 _position = (int)value;
             }
         }
@@ -37,7 +40,7 @@ namespace Appegy.Storage
             if (_buffer.Length < _rememberedCapacity)
             {
                 ReturnBuffer();
-                _buffer = ArrayPool<byte>.Shared.Rent(_rememberedCapacity);
+                _buffer = ArrayPool<byte>.Shared?.Rent(_rememberedCapacity) ?? new byte[_rememberedCapacity];
             }
             _position = 0;
             _length = 0;
@@ -66,7 +69,7 @@ namespace Appegy.Storage
         {
             if (_buffer.Length > 0)
             {
-                ArrayPool<byte>.Shared.Return(_buffer);
+                ArrayPool<byte>.Shared?.Return(_buffer);
                 _buffer = Array.Empty<byte>();
             }
         }
@@ -92,7 +95,7 @@ namespace Appegy.Storage
                 SeekOrigin.Begin => offset,
                 SeekOrigin.Current => _position + offset,
                 SeekOrigin.End => _length + offset,
-                _ => throw new UnexpectedEnumException(typeof(SeekOrigin), origin)
+                _ => throw new UnexpectedEnumException(typeof(SeekOrigin), origin),
             };
             return _position;
         }
@@ -105,7 +108,13 @@ namespace Appegy.Storage
         public override void Write(byte[] buffer, int offset, int count)
         {
             EnsureCapacity(_position + count);
-            Array.Copy(buffer, offset, _buffer, _position, count);
+            Array.Copy(
+                buffer,
+                offset,
+                _buffer,
+                _position,
+                count
+            );
             Advance(count);
         }
 
@@ -132,15 +141,12 @@ namespace Appegy.Storage
         private void EnsureCapacity(int required)
         {
             if (required < 0)
-            {
                 throw new IOException("Storage is too big to be serialized: buffer would exceed 2 GB.");
-            }
             if (required <= _buffer.Length)
-            {
                 return;
-            }
             var doubled = (int)Math.Min((long)_buffer.Length * 2, int.MaxValue);
-            var grown = ArrayPool<byte>.Shared.Rent(Math.Max(Math.Max(required, doubled), MinimumCapacity));
+            var minimumLength = Math.Max(Math.Max(required, doubled), MinimumCapacity);
+            var grown = ArrayPool<byte>.Shared?.Rent(minimumLength) ?? new byte[minimumLength];
             Array.Copy(_buffer, grown, _length);
             ReturnBuffer();
             _buffer = grown;
@@ -150,9 +156,7 @@ namespace Appegy.Storage
         {
             _position += count;
             if (_position > _length)
-            {
                 _length = _position;
-            }
         }
     }
 }

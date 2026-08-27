@@ -1,18 +1,18 @@
 {
-    "name": "Appegy.BinaryStorage.Editor",
-    "rootNamespace": "Appegy.Storage",
-    "references": [
-        "Appegy.BinaryStorage"
-    ],
-    "includePlatforms": [
-        "Editor"
-    ],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": true,
-    "precompiledReferences": [],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [],
-    "noEngineReferences": false
+  "name": "Appegy.BinaryStorage.Editor",
+  "rootNamespace": "Appegy.Storage",
+  "references": [
+    "Appegy.BinaryStorage"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
 }

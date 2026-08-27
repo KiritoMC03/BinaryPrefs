@@ -9,19 +9,18 @@ namespace Appegy.Storage.Serializers
     {
         private readonly TypeSerializer<T> _typeSerializer;
 
-        public override string TypeName { get; }
-        public override IReadOnlyList<string> FallbackNames { get; }
-
         public CollectionTypeSerializer(TypeSerializer<T> typeSerializer)
         {
             _typeSerializer = typeSerializer;
             TypeName = $"{typeof(TCollection).Name}<{typeSerializer.TypeName}>";
-            FallbackNames = typeSerializer.FallbackNames
-                .Select(fallback => $"{typeof(TCollection).Name}<{fallback}>")
+            FallbackNames = typeSerializer.FallbackNames.Select(fallback => $"{typeof(TCollection).Name}<{fallback}>")
                 .ToArray();
         }
 
-        public override bool Equals(TCollection value1, TCollection value2)
+        public override string TypeName { get; }
+        public override IReadOnlyList<string> FallbackNames { get; }
+
+        public override bool Equals(TCollection? value1, TCollection? value2)
         {
             return value1 == value2;
         }
@@ -30,9 +29,7 @@ namespace Appegy.Storage.Serializers
         {
             writer.Write(collection.Count);
             foreach (var value in collection)
-            {
                 _typeSerializer.WriteTo(writer, value);
-            }
         }
 
         public override TCollection ReadFrom(BinaryReader reader)

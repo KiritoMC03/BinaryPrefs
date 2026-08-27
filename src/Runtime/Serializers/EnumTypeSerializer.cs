@@ -4,22 +4,22 @@ using System.IO;
 namespace Appegy.Storage.Serializers
 {
     public class EnumTypeSerializer<TEnum, TNumber> : TypeSerializer<TEnum>
-        where TEnum : unmanaged
-        where TNumber : unmanaged, IEquatable<TNumber>
+        where TEnum : unmanaged where TNumber : unmanaged, IEquatable<TNumber>
     {
         private readonly TypeSerializer<TNumber> _numberType;
+
+        public EnumTypeSerializer(TypeSerializer<TNumber> numberType, bool useFullName)
+        {
+            _numberType = numberType;
+            TypeName = (useFullName ? typeof(TEnum).FullName : typeof(TEnum).Name)
+                    ?? throw new NullReferenceException("Failed to get type name");
+        }
 
         public override string TypeName { get; }
 
         public override bool Equals(TEnum value1, TEnum value2)
         {
             return ToNumber(value1).Equals(ToNumber(value2));
-        }
-
-        public EnumTypeSerializer(TypeSerializer<TNumber> numberType, bool useFullName)
-        {
-            _numberType = numberType;
-            TypeName = useFullName ? typeof(TEnum).FullName : typeof(TEnum).Name;
         }
 
         public override void WriteTo(BinaryWriter writer, TEnum value)
@@ -36,12 +36,12 @@ namespace Appegy.Storage.Serializers
 
         public static unsafe TNumber ToNumber(TEnum enumValue)
         {
-            return *(TNumber*)(&enumValue);
+            return *(TNumber*)&enumValue;
         }
 
         public static unsafe TEnum FromNumber(TNumber numberValue)
         {
-            return *(TEnum*)(&numberValue);
+            return *(TEnum*)&numberValue;
         }
     }
 }

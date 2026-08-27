@@ -1,10 +1,12 @@
 using System;
+using System.Threading;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal class DisposableScope : IDisposable
     {
-        private readonly Action _disposeCallback;
+        private Action? _disposeCallback;
         private bool _disposed;
 
         public DisposableScope(Action disposeCallback)
@@ -14,9 +16,10 @@ namespace Appegy.Storage
 
         void IDisposable.Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+                return;
             _disposed = true;
-            _disposeCallback?.Invoke();
+            Interlocked.Exchange(ref _disposeCallback, null)?.Invoke();
         }
     }
 }

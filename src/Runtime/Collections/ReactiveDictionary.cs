@@ -2,27 +2,28 @@
 using System.Collections;
 using System.Collections.Generic;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
-    internal class ReactiveDictionary<TKey, TValue> : IReactiveCollection, IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>
+    internal class ReactiveDictionary<TKey, TValue> : IReactiveCollection,
+        IDictionary<TKey, TValue>,
+        IReadOnlyDictionary<TKey, TValue>
     {
         private readonly Dictionary<TKey, TValue> _dictionary = new();
 
         public bool IsDisposed { get; private set; }
 
-        public event Action<IReactiveCollection> OnChanged;
+        public event Action<IReactiveCollection> OnChanged = delegate { };
 
         private void SetDirty()
         {
-            OnChanged?.Invoke(this);
+            OnChanged(this);
         }
 
         private void ThrowIfDisposed()
         {
             if (IsDisposed)
-            {
                 throw new ObjectDisposedException(nameof(ReactiveDictionary<TKey, TValue>));
-            }
         }
 
         #region Mutable functionallity
@@ -30,9 +31,7 @@ namespace Appegy.Storage
         public void Dispose()
         {
             if (IsDisposed)
-            {
                 return;
-            }
             Clear();
             IsDisposed = true;
         }
@@ -71,9 +70,7 @@ namespace Appegy.Storage
             ThrowIfDisposed();
             var removed = ((ICollection<KeyValuePair<TKey, TValue>>)_dictionary).Remove(item);
             if (removed)
-            {
                 SetDirty();
-            }
             return removed;
         }
 
@@ -89,9 +86,7 @@ namespace Appegy.Storage
             ThrowIfDisposed();
             var removed = _dictionary.Remove(key);
             if (removed)
-            {
                 SetDirty();
-            }
             return removed;
         }
 
@@ -107,21 +102,39 @@ namespace Appegy.Storage
 
         public ICollection<TValue> Values => _dictionary.Values;
 
-        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() => _dictionary.GetEnumerator();
+        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
+        {
+            return _dictionary.GetEnumerator();
+        }
 
         IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => Keys;
 
         IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => Values;
 
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
 
-        public bool Contains(KeyValuePair<TKey, TValue> item) => ((ICollection<KeyValuePair<TKey, TValue>>)_dictionary).Contains(item);
+        public bool Contains(KeyValuePair<TKey, TValue> item)
+        {
+            return ((ICollection<KeyValuePair<TKey, TValue>>)_dictionary).Contains(item);
+        }
 
-        public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex) => ((ICollection<KeyValuePair<TKey, TValue>>)_dictionary).CopyTo(array, arrayIndex);
+        public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
+        {
+            ((ICollection<KeyValuePair<TKey, TValue>>)_dictionary).CopyTo(array, arrayIndex);
+        }
 
-        public bool ContainsKey(TKey key) => _dictionary.ContainsKey(key);
+        public bool ContainsKey(TKey key)
+        {
+            return _dictionary.ContainsKey(key);
+        }
 
-        public bool TryGetValue(TKey key, out TValue value) => _dictionary.TryGetValue(key, out value);
+        public bool TryGetValue(TKey key, out TValue value)
+        {
+            return _dictionary.TryGetValue(key, out value);
+        }
 
         #endregion
     }

@@ -22,7 +22,12 @@ namespace Appegy.Storage.Serializers
             var y = reader.ReadSingle();
             var z = reader.ReadSingle();
             var w = reader.ReadSingle();
-            return new Quaternion(x, y, z, w);
+            return new Quaternion(
+                x,
+                y,
+                z,
+                w
+            );
         }
     }
 
@@ -85,7 +90,12 @@ namespace Appegy.Storage.Serializers
             var y = reader.ReadSingle();
             var z = reader.ReadSingle();
             var w = reader.ReadSingle();
-            return new Vector4(x, y, z, w);
+            return new Vector4(
+                x,
+                y,
+                z,
+                w
+            );
         }
     }
 

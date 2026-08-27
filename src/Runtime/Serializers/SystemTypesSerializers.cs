@@ -9,8 +9,16 @@ namespace Appegy.Storage.Serializers
     {
         public static BooleanSerializer Shared { get; } = new();
         public override string TypeName => "bool";
-        public override void WriteTo(BinaryWriter writer, bool value) => writer.Write(value);
-        public override bool ReadFrom(BinaryReader reader) => reader.ReadBoolean();
+
+        public override void WriteTo(BinaryWriter writer, bool value)
+        {
+            writer.Write(value);
+        }
+
+        public override bool ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadBoolean();
+        }
     }
 
     public class CharSerializer : EquatableTypeSerializer<char>
@@ -21,24 +29,24 @@ namespace Appegy.Storage.Serializers
         public override void WriteTo(BinaryWriter writer, char value)
         {
             const int size = sizeof(char);
-            var buffer = ArrayPool<byte>.Shared.Rent(size);
+            var buffer = ArrayPool<byte>.Shared?.Rent(size) ?? new byte[size];
             BitConverter.TryWriteBytes(buffer, value);
             writer.Write(buffer, 0, size);
-            ArrayPool<byte>.Shared.Return(buffer);
+            ArrayPool<byte>.Shared?.Return(buffer);
         }
 
         public override char ReadFrom(BinaryReader reader)
         {
             const int size = sizeof(char);
-            var buffer = ArrayPool<byte>.Shared.Rent(size);
+            var buffer = ArrayPool<byte>.Shared?.Rent(size) ?? new byte[size];
             var read = reader.BaseStream.Read(buffer, 0, size);
             if (read != size)
             {
-                ArrayPool<byte>.Shared.Return(buffer);
+                ArrayPool<byte>.Shared?.Return(buffer);
                 throw new EndOfStreamException($"Expected {size} bytes for char but read {read}.");
             }
             var value = BitConverter.ToChar(buffer);
-            ArrayPool<byte>.Shared.Return(buffer);
+            ArrayPool<byte>.Shared?.Return(buffer);
             return value;
         }
     }
@@ -47,98 +55,186 @@ namespace Appegy.Storage.Serializers
     {
         public static ByteSerializer Shared { get; } = new();
         public override string TypeName => "byte";
-        public override void WriteTo(BinaryWriter writer, byte value) => writer.Write(value);
-        public override byte ReadFrom(BinaryReader reader) => reader.ReadByte();
+
+        public override void WriteTo(BinaryWriter writer, byte value)
+        {
+            writer.Write(value);
+        }
+
+        public override byte ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadByte();
+        }
     }
 
     public class SByteSerializer : EquatableTypeSerializer<sbyte>
     {
         public static SByteSerializer Shared { get; } = new();
         public override string TypeName => "sbyte";
-        public override void WriteTo(BinaryWriter writer, sbyte value) => writer.Write(value);
-        public override sbyte ReadFrom(BinaryReader reader) => reader.ReadSByte();
+
+        public override void WriteTo(BinaryWriter writer, sbyte value)
+        {
+            writer.Write(value);
+        }
+
+        public override sbyte ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadSByte();
+        }
     }
 
     public class Int16Serializer : EquatableTypeSerializer<short>
     {
         public static Int16Serializer Shared { get; } = new();
         public override string TypeName => "short";
-        public override void WriteTo(BinaryWriter writer, short value) => writer.Write(value);
-        public override short ReadFrom(BinaryReader reader) => reader.ReadInt16();
+
+        public override void WriteTo(BinaryWriter writer, short value)
+        {
+            writer.Write(value);
+        }
+
+        public override short ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadInt16();
+        }
     }
 
     public class UInt16Serializer : EquatableTypeSerializer<ushort>
     {
         public static UInt16Serializer Shared { get; } = new();
         public override string TypeName => "ushort";
-        public override void WriteTo(BinaryWriter writer, ushort value) => writer.Write(value);
-        public override ushort ReadFrom(BinaryReader reader) => reader.ReadUInt16();
+
+        public override void WriteTo(BinaryWriter writer, ushort value)
+        {
+            writer.Write(value);
+        }
+
+        public override ushort ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadUInt16();
+        }
     }
 
     public class Int32Serializer : EquatableTypeSerializer<int>
     {
         public static Int32Serializer Shared { get; } = new();
         public override string TypeName => "int";
-        public override void WriteTo(BinaryWriter writer, int value) => writer.Write(value);
-        public override int ReadFrom(BinaryReader reader) => reader.ReadInt32();
+
+        public override void WriteTo(BinaryWriter writer, int value)
+        {
+            writer.Write(value);
+        }
+
+        public override int ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadInt32();
+        }
     }
 
     public class UInt32Serializer : EquatableTypeSerializer<uint>
     {
         public static UInt32Serializer Shared { get; } = new();
         public override string TypeName => "uint";
-        public override void WriteTo(BinaryWriter writer, uint value) => writer.Write(value);
-        public override uint ReadFrom(BinaryReader reader) => reader.ReadUInt32();
+
+        public override void WriteTo(BinaryWriter writer, uint value)
+        {
+            writer.Write(value);
+        }
+
+        public override uint ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadUInt32();
+        }
     }
 
     public class Int64Serializer : EquatableTypeSerializer<long>
     {
         public static Int64Serializer Shared { get; } = new();
         public override string TypeName => "long";
-        public override void WriteTo(BinaryWriter writer, long value) => writer.Write(value);
-        public override long ReadFrom(BinaryReader reader) => reader.ReadInt64();
+
+        public override void WriteTo(BinaryWriter writer, long value)
+        {
+            writer.Write(value);
+        }
+
+        public override long ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadInt64();
+        }
     }
 
     public class UInt64Serializer : EquatableTypeSerializer<ulong>
     {
         public static UInt64Serializer Shared { get; } = new();
         public override string TypeName => "ulong";
-        public override void WriteTo(BinaryWriter writer, ulong value) => writer.Write(value);
-        public override ulong ReadFrom(BinaryReader reader) => reader.ReadUInt64();
+
+        public override void WriteTo(BinaryWriter writer, ulong value)
+        {
+            writer.Write(value);
+        }
+
+        public override ulong ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadUInt64();
+        }
     }
 
     public class SingleSerializer : EquatableTypeSerializer<float>
     {
         public static SingleSerializer Shared { get; } = new();
         public override string TypeName => "float";
-        public override void WriteTo(BinaryWriter writer, float value) => writer.Write(value);
-        public override float ReadFrom(BinaryReader reader) => reader.ReadSingle();
+
+        public override void WriteTo(BinaryWriter writer, float value)
+        {
+            writer.Write(value);
+        }
+
+        public override float ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadSingle();
+        }
     }
 
     public class DoubleSerializer : EquatableTypeSerializer<double>
     {
         public static DoubleSerializer Shared { get; } = new();
         public override string TypeName => "double";
-        public override void WriteTo(BinaryWriter writer, double value) => writer.Write(value);
-        public override double ReadFrom(BinaryReader reader) => reader.ReadDouble();
+
+        public override void WriteTo(BinaryWriter writer, double value)
+        {
+            writer.Write(value);
+        }
+
+        public override double ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadDouble();
+        }
     }
 
     public class DecimalSerializer : EquatableTypeSerializer<decimal>
     {
         public static DecimalSerializer Shared { get; } = new();
         public override string TypeName => "decimal";
-        public override void WriteTo(BinaryWriter writer, decimal value) => writer.Write(value);
-        public override decimal ReadFrom(BinaryReader reader) => reader.ReadDecimal();
+
+        public override void WriteTo(BinaryWriter writer, decimal value)
+        {
+            writer.Write(value);
+        }
+
+        public override decimal ReadFrom(BinaryReader reader)
+        {
+            return reader.ReadDecimal();
+        }
     }
 
-    public class StringSerializer : EquatableTypeSerializerRef<string>
+    public class StringSerializer : EquatableTypeSerializerRef<string?>
     {
-        public static StringSerializer Shared { get; } = new();
         public static readonly Encoding Encoding = Encoding.UTF8;
+        public static StringSerializer Shared { get; } = new();
 
         public override string TypeName => "string";
 
-        public override void WriteTo(BinaryWriter writer, string value)
+        public override void WriteTo(BinaryWriter writer, string? value)
         {
             if (value == null)
             {
@@ -151,34 +247,30 @@ namespace Appegy.Storage.Serializers
             else
             {
                 var size = sizeof(int) + Encoding.GetByteCount(value);
-                var buffer = ArrayPool<byte>.Shared.Rent(size);
+                var buffer = ArrayPool<byte>.Shared?.Rent(size) ?? new byte[size];
                 var bufferSize = Encoding.GetBytes(value, buffer);
                 writer.Write(bufferSize);
                 writer.Write(buffer, 0, bufferSize);
-                ArrayPool<byte>.Shared.Return(buffer);
+                ArrayPool<byte>.Shared?.Return(buffer);
             }
         }
 
-        public override string ReadFrom(BinaryReader reader)
+        public override string? ReadFrom(BinaryReader reader)
         {
             var size = reader.ReadInt32();
             if (size == -1)
-            {
                 return null;
-            }
             if (size == 0)
-            {
                 return string.Empty;
-            }
-            var buffer = ArrayPool<byte>.Shared.Rent(size);
+            var buffer = ArrayPool<byte>.Shared?.Rent(size) ?? new byte[size];
             var read = reader.BaseStream.Read(buffer, 0, size);
             if (read != size)
             {
-                ArrayPool<byte>.Shared.Return(buffer);
+                ArrayPool<byte>.Shared?.Return(buffer);
                 throw new EndOfStreamException($"Expected {size} bytes for string but read {read}.");
             }
             var value = Encoding.GetString(buffer, 0, size);
-            ArrayPool<byte>.Shared.Return(buffer);
+            ArrayPool<byte>.Shared?.Return(buffer);
             return value;
         }
     }
@@ -187,15 +279,31 @@ namespace Appegy.Storage.Serializers
     {
         public static DateTimeSerializer Shared { get; } = new();
         public override string TypeName => "DateTime";
-        public override void WriteTo(BinaryWriter writer, DateTime value) => writer.Write(value.ToBinary());
-        public override DateTime ReadFrom(BinaryReader reader) => DateTime.FromBinary(reader.ReadInt64());
+
+        public override void WriteTo(BinaryWriter writer, DateTime value)
+        {
+            writer.Write(value.ToBinary());
+        }
+
+        public override DateTime ReadFrom(BinaryReader reader)
+        {
+            return DateTime.FromBinary(reader.ReadInt64());
+        }
     }
 
     public class TimeSpanSerializer : EquatableTypeSerializer<TimeSpan>
     {
         public static TimeSpanSerializer Shared { get; } = new();
         public override string TypeName => "TimeSpan";
-        public override void WriteTo(BinaryWriter writer, TimeSpan value) => writer.Write(value.Ticks);
-        public override TimeSpan ReadFrom(BinaryReader reader) => TimeSpan.FromTicks(reader.ReadInt64());
+
+        public override void WriteTo(BinaryWriter writer, TimeSpan value)
+        {
+            writer.Write(value.Ticks);
+        }
+
+        public override TimeSpan ReadFrom(BinaryReader reader)
+        {
+            return TimeSpan.FromTicks(reader.ReadInt64());
+        }
     }
 }

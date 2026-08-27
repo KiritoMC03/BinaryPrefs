@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.ExceptionServices;
 using System.Text;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal sealed class StorageFile
@@ -15,13 +17,11 @@ namespace Appegy.Storage
 
         private static readonly ConcurrentDictionary<string, StorageFile> _files = new();
         private static readonly UTF8Encoding _debugJsonEncoding = new(false);
-
-        internal delegate bool ReadAttempt(string filePath, out StorageFileCorruptedException failure);
+        public readonly string Backup;
+        public readonly string DebugJson;
 
         public readonly string Main;
         public readonly string Temp;
-        public readonly string Backup;
-        public readonly string DebugJson;
 
         private readonly object _publishGate = new();
 
@@ -35,12 +35,14 @@ namespace Appegy.Storage
 
         public static StorageFile Of(string filePath)
         {
-            return _files.GetOrAdd(Normalize(filePath), path => new StorageFile(path));
+            return _files.GetOrAdd(Normalize(filePath), path => new StorageFile(path))
+                ?? throw new FileNotFoundException(filePath);
         }
 
         public static string Normalize(string filePath)
         {
-            return Path.GetFullPath(filePath).TrimEnd(Path.DirectorySeparatorChar);
+            return Path.GetFullPath(filePath).TrimEnd(Path.DirectorySeparatorChar)
+                ?? throw new FileNotFoundException(filePath);
         }
 
         public void Publish(StorageSnapshot snapshot)
@@ -57,13 +59,9 @@ namespace Appegy.Storage
 
                     WriteTemp(snapshot);
                     if (File.Exists(Main))
-                    {
                         File.Replace(Temp, Main, Backup);
-                    }
                     else
-                    {
                         File.Move(Temp, Main);
-                    }
                 }
             }
             finally
@@ -96,16 +94,12 @@ namespace Appegy.Storage
             lock (_publishGate)
             {
                 if (!File.Exists(Main))
-                {
                     return;
-                }
 
                 DeleteFileIfExists(Temp);
 
                 if (tryRead(Main, out var failure))
-                {
                     return;
-                }
 
                 DeleteFileIfExists(Main);
 
@@ -113,20 +107,24 @@ namespace Appegy.Storage
                 {
                     File.Move(Backup, Main);
                     if (tryRead(Main, out _))
-                    {
                         return;
-                    }
                     DeleteFileIfExists(Main);
                 }
 
-                ExceptionDispatchInfo.Capture(failure).Throw();
+                ExceptionDispatchInfo.Capture(failure)?.Throw();
             }
         }
 
         private void WriteTemp(StorageSnapshot snapshot)
         {
             EnsureDirectoryExists();
-            using var stream = new FileStream(Temp, FileMode.Create, FileAccess.Write, FileShare.None, NoBuffering);
+            using var stream = new FileStream(
+                Temp,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                NoBuffering
+            );
             stream.Write(snapshot.Buffer, 0, snapshot.Length);
             stream.Flush(true);
         }
@@ -141,18 +139,17 @@ namespace Appegy.Storage
         private void EnsureDirectoryExists()
         {
             var directoryName = Path.GetDirectoryName(Main);
-            if (!string.IsNullOrEmpty(directoryName) && !Directory.Exists(directoryName))
-            {
+            if (directoryName != null && !string.IsNullOrEmpty(directoryName) && !Directory.Exists(directoryName))
                 Directory.CreateDirectory(directoryName);
-            }
         }
 
         private static void DeleteFileIfExists(string filePath)
         {
             if (File.Exists(filePath))
-            {
                 File.Delete(filePath);
-            }
         }
+
+        internal delegate bool ReadAttempt
+            (string filePath, [NotNullWhen(false)] out StorageFileCorruptedException? failure);
     }
 }

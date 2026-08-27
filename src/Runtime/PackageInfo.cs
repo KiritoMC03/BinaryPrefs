@@ -10,6 +10,6 @@ namespace Appegy.Storage
     {
         public const string Name = "com.appegy.binary-prefs";
         public const string Version = "1.1.2";
-        public static string PersistentFolder => Path.Combine(Application.persistentDataPath, Name);
+        public static string PersistentFolder => Path.Combine(Application.persistentDataPath!, Name);
     }
 }

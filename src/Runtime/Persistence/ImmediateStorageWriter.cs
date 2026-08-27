@@ -1,3 +1,5 @@
+// ReSharper disable once CheckNamespace
+
 namespace Appegy.Storage
 {
     internal sealed class ImmediateStorageWriter : IStorageWriter
