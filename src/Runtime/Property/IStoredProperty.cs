@@ -15,4 +15,10 @@ namespace Appegy.Storage
         /// <summary>Gets the current value from storage or writes a new value to storage.</summary>
         T? Value { get; set; }
     }
+
+    public interface IReadOnlyStoredProperty<out T>
+    {
+        /// <summary>Gets the current value from storage.</summary>
+        T? Value { get; }
+    }
 }
