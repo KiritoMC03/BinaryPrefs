@@ -3,7 +3,7 @@ using System;
 // ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
-    internal sealed class StoredProperty<T> : IStoredProperty<T>
+    internal sealed class StoredProperty<T> : IStoredProperty<T>, IReadOnlyStoredProperty<T>
     {
         private readonly T? _defaultValue;
         private readonly string _key;
