@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 
 namespace Appegy.Storage
@@ -6,7 +8,7 @@ namespace Appegy.Storage
     {
         public bool IsDisposed { get; private set; }
 
-        public event Action<IReactiveCollection> OnChanged;
+        public event Action<IReactiveCollection> OnChanged = delegate { };
 
         protected abstract string ObjectName { get; }
 

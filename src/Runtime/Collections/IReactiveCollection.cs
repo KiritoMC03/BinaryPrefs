@@ -1,9 +1,12 @@
+#nullable enable
+
 using System;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal interface IReactiveCollection : IDisposable
     {
-        public event Action<IReactiveCollection> OnChanged;
+        event Action<IReactiveCollection> OnChanged;
     }
 }

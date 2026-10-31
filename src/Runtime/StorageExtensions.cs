@@ -1,3 +1,5 @@
+#nullable enable
+
 namespace Appegy.Storage
 {
     public static class StorageExtensions

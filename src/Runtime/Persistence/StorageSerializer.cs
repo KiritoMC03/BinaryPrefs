@@ -1,8 +1,12 @@
+#nullable enable
+
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal sealed class StorageSerializer
@@ -22,9 +26,7 @@ namespace Appegy.Storage
         public StorageSnapshot Serialize(Dictionary<string, Record> data)
         {
             if (data.Count == 0)
-            {
                 return StorageSnapshot.Empty;
-            }
 
             _stream.Reset();
             try
@@ -40,7 +42,13 @@ namespace Appegy.Storage
             return new StorageSnapshot(buffer, length);
         }
 
-        public bool TryDeserialize(string filePath, Dictionary<string, Record> data, KeyLoadFailedBehaviour keyLoadFailedBehaviour, out StorageFileCorruptedException failure)
+        public bool TryDeserialize
+        (
+            string filePath,
+            Dictionary<string, Record> data,
+            KeyLoadFailedBehaviour keyLoadFailedBehaviour,
+            [NotNullWhen(false)] out StorageFileCorruptedException? failure
+        )
         {
             using var stream = StorageFormat.OpenFile(filePath);
             try
@@ -62,7 +70,9 @@ namespace Appegy.Storage
             data.Clear();
             for (var i = 0; i < _sections.Count; i++)
             {
-                _sections[i].Count = 0;
+                var section = _sections[i];
+                if (section != null)
+                    section.Count = 0;
             }
         }
     }

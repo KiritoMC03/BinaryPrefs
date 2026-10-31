@@ -1,8 +1,11 @@
+#nullable enable
+
 using System;
 using System.Collections.Generic;
-using System.IO;
+using System.Diagnostics.CodeAnalysis;
 using Debug = UnityEngine.Debug;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal sealed class StoragePersistence
@@ -11,8 +14,6 @@ namespace Appegy.Storage
         private readonly StorageSerializer _serializer;
         private readonly IStorageWriter _writer;
 
-        public bool SaveJsonCopyForDebug { get; set; }
-
         public StoragePersistence(string filePath, IReadOnlyList<BinarySection> sections, bool saveOnBackgroundThread)
         {
             _file = StorageFile.Of(filePath);
@@ -20,12 +21,20 @@ namespace Appegy.Storage
             _writer = saveOnBackgroundThread ? new BackgroundStorageWriter(_file) : new ImmediateStorageWriter(_file);
         }
 
+        public bool SaveJsonCopyForDebug { get; set; }
+
         public void Load(Dictionary<string, Record> data, KeyLoadFailedBehaviour keyLoadFailedBehaviour, CorruptedFileBehaviour corruptedFileBehaviour)
         {
             _serializer.Clear(data);
+
+            bool TryRead(string filePath, [NotNullWhen(false)] out StorageFileCorruptedException? failure)
+            {
+                return _serializer.TryDeserialize(filePath, data, keyLoadFailedBehaviour, out failure);
+            }
+
             try
             {
-                _file.Load((string filePath, out StorageFileCorruptedException failure) => _serializer.TryDeserialize(filePath, data, keyLoadFailedBehaviour, out failure));
+                _file.Load(TryRead);
             }
             catch (StorageFileCorruptedException exception)
             {
@@ -48,9 +57,7 @@ namespace Appegy.Storage
         {
             _writer.Write(_serializer.Serialize(data), waitForDisk);
             if (SaveJsonCopyForDebug)
-            {
                 SaveJsonCopy(data);
-            }
         }
 
         public bool Flush()
@@ -63,13 +70,9 @@ namespace Appegy.Storage
             try
             {
                 if (data.Count == 0)
-                {
                     _file.RemoveDebugJson();
-                }
                 else
-                {
                     _file.WriteDebugJson(DebugJsonWriter.ToJson(data));
-                }
             }
             catch (Exception exception)
             {

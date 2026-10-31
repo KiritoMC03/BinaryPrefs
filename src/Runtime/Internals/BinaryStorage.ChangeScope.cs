@@ -1,5 +1,8 @@
+#nullable enable
+
 using System;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     public partial class BinaryStorage

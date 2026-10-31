@@ -1,10 +1,13 @@
+#nullable enable
+
 using System.Buffers;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal readonly struct StorageSnapshot
     {
-        public readonly byte[] Buffer;
+        public readonly byte[]? Buffer;
         public readonly int Length;
 
         public StorageSnapshot(byte[] buffer, int length)
@@ -13,16 +16,14 @@ namespace Appegy.Storage
             Length = length;
         }
 
-        public static StorageSnapshot Empty => default;
+        public static StorageSnapshot Empty => default(StorageSnapshot);
 
         public bool IsEmpty => Buffer == null;
 
         public void Release()
         {
             if (Buffer != null)
-            {
-                ArrayPool<byte>.Shared.Return(Buffer);
-            }
+                ArrayPool<byte>.Shared?.Return(Buffer);
         }
     }
 }

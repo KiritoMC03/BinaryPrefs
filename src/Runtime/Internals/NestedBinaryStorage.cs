@@ -1,16 +1,20 @@
+#nullable enable
+
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using UnityEngine.Pool;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal class NestedBinaryStorage : IBinaryStorage
     {
         private const int MinKeysAddedBetweenCleanups = 100;
-
-        private readonly IBinaryStorage _root;
         private readonly string _prefix;
         private readonly Dictionary<string, string> _prefixedKeys = new();
+
+        private readonly IBinaryStorage _root;
         private int _keysAddedSinceCleanup;
         private int _keysAllowedBeforeCleanup = MinKeysAddedBetweenCleanups;
 
@@ -37,59 +41,7 @@ namespace Appegy.Storage
             }
         }
 
-        private string GetKey(string key)
-        {
-            if (_prefixedKeys.TryGetValue(key, out var prefixedKey))
-            {
-                return prefixedKey;
-            }
-            if (_keysAddedSinceCleanup >= _keysAllowedBeforeCleanup)
-            {
-                ForgetKeysMissingFromRoot();
-            }
-            prefixedKey = _prefix + key;
-            _prefixedKeys.Add(key, prefixedKey);
-            _keysAddedSinceCleanup++;
-            return prefixedKey;
-        }
-
-        private void ForgetKeysMissingFromRoot()
-        {
-            var missing = ListPool<string>.Get();
-            foreach (var pair in _prefixedKeys)
-            {
-                if (!_root.Has(pair.Value))
-                {
-                    missing.Add(pair.Key);
-                }
-            }
-            foreach (var key in missing)
-            {
-                _prefixedKeys.Remove(key);
-            }
-            ListPool<string>.Release(missing);
-
-            _keysAddedSinceCleanup = 0;
-            _keysAllowedBeforeCleanup = Math.Max(MinKeysAddedBetweenCleanups, _prefixedKeys.Count);
-        }
-
-        private bool HasPrefix(string key)
-        {
-            return key.StartsWith(_prefix, StringComparison.Ordinal);
-        }
-
-        private bool TryExtractKey(string key, out string value)
-        {
-            if (HasPrefix(key))
-            {
-                value = key.Substring(_prefix.Length);
-                return true;
-            }
-            value = null;
-            return false;
-        }
-
-        public object GetRaw(string key)
+        public object? GetRaw(string key)
         {
             return _root.GetRaw(GetKey(key));
         }
@@ -104,7 +56,7 @@ namespace Appegy.Storage
             return _root.Has(GetKey(key));
         }
 
-        public Type TypeOf(string key)
+        public Type? TypeOf(string key)
         {
             return _root.TypeOf(GetKey(key));
         }
@@ -114,7 +66,8 @@ namespace Appegy.Storage
             return _root.Supports<T>();
         }
 
-        public T Get<T>(string key, T defaultValue = default, MissingKeyBehavior? overrideMissingKeyBehavior = null)
+        public T? Get<T>
+            (string key, T? defaultValue = default(T?), MissingKeyBehavior? overrideMissingKeyBehavior = null)
         {
             return _root.Get(GetKey(key), defaultValue, overrideMissingKeyBehavior);
         }
@@ -192,6 +145,50 @@ namespace Appegy.Storage
         public IReadOnlyDictionary<TKey, TValue> GetReadOnlyDictionaryOf<TKey, TValue>(string key)
         {
             return _root.GetReadOnlyDictionaryOf<TKey, TValue>(GetKey(key));
+        }
+
+        private string GetKey(string key)
+        {
+            if (_prefixedKeys.TryGetValue(key, out var prefixedKey)
+             && prefixedKey != null
+             && !string.IsNullOrEmpty(prefixedKey))
+                return prefixedKey;
+            if (_keysAddedSinceCleanup >= _keysAllowedBeforeCleanup)
+                ForgetKeysMissingFromRoot();
+            prefixedKey = _prefix + key;
+            _prefixedKeys.Add(key, prefixedKey);
+            _keysAddedSinceCleanup++;
+            return prefixedKey;
+        }
+
+        private void ForgetKeysMissingFromRoot()
+        {
+            var missing = ListPool<string>.Get() ?? new List<string>(0);
+            foreach (var pair in _prefixedKeys)
+                if (pair.Value != null && !_root.Has(pair.Value))
+                    missing.Add(pair.Key);
+            foreach (var key in missing)
+                _prefixedKeys.Remove(key);
+            ListPool<string>.Release(missing);
+
+            _keysAddedSinceCleanup = 0;
+            _keysAllowedBeforeCleanup = Math.Max(MinKeysAddedBetweenCleanups, _prefixedKeys.Count);
+        }
+
+        private bool HasPrefix(string key)
+        {
+            return key.StartsWith(_prefix, StringComparison.Ordinal);
+        }
+
+        private bool TryExtractKey(string key, [NotNullWhen(true)] out string? value)
+        {
+            if (HasPrefix(key))
+            {
+                value = key[_prefix.Length..];
+                return true;
+            }
+            value = null;
+            return false;
         }
     }
 }

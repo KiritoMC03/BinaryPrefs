@@ -1,7 +1,10 @@
+#nullable enable
+
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     public partial class BinaryStorage
@@ -11,9 +14,7 @@ namespace Appegy.Storage
         static partial void ThrowIfFilePathLocked(string filePath)
         {
             if (_lockedFiles.Contains(StorageFile.Normalize(filePath)))
-            {
                 throw new Exception($"Storage already opened by this path. File path: {filePath}");
-            }
         }
 
         static partial void LockFilePathInEditor(string filePath)

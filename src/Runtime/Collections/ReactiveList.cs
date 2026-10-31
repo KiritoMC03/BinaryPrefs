@@ -1,6 +1,9 @@
+#nullable enable
+
 using System.Collections;
 using System.Collections.Generic;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal class ReactiveList<T> : ReactiveCollection, IList<T>, IReadOnlyList<T>
@@ -48,9 +51,7 @@ namespace Appegy.Storage
             ThrowIfDisposed();
             var removed = _list.Remove(item);
             if (removed)
-            {
                 SetDirty();
-            }
             return removed;
         }
 
@@ -76,15 +77,30 @@ namespace Appegy.Storage
 
         public bool IsReadOnly => IsDisposed || ((IList<T>)_list).IsReadOnly;
 
-        public int IndexOf(T item) => _list.IndexOf(item);
+        public int IndexOf(T item)
+        {
+            return _list.IndexOf(item);
+        }
 
-        public IEnumerator<T> GetEnumerator() => _list.GetEnumerator();
+        public IEnumerator<T> GetEnumerator()
+        {
+            return _list.GetEnumerator();
+        }
 
-        IEnumerator IEnumerable.GetEnumerator() => _list.GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return _list.GetEnumerator();
+        }
 
-        public bool Contains(T item) => _list.Contains(item);
+        public bool Contains(T item)
+        {
+            return _list.Contains(item);
+        }
 
-        public void CopyTo(T[] array, int arrayIndex) => _list.CopyTo(array, arrayIndex);
+        public void CopyTo(T[] array, int arrayIndex)
+        {
+            _list.CopyTo(array, arrayIndex);
+        }
 
         #endregion
     }

@@ -1,7 +1,10 @@
+#nullable enable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal static class CollectionTypeCache<T>
@@ -22,16 +25,10 @@ namespace Appegy.Storage
         private static bool Detect(Type type)
         {
             if (IsCollectionContract(type))
-            {
                 return true;
-            }
             foreach (var contract in type.GetInterfaces())
-            {
                 if (IsCollectionContract(contract))
-                {
                     return true;
-                }
-            }
             return false;
         }
 

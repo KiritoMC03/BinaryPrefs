@@ -1,6 +1,10 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+#nullable enable
 
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+
+// ReSharper disable once CheckNamespace
 namespace Appegy.Storage
 {
     internal class ReactiveDictionary<TKey, TValue> : ReactiveCollection, IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>
@@ -45,9 +49,7 @@ namespace Appegy.Storage
             ThrowIfDisposed();
             var removed = ((ICollection<KeyValuePair<TKey, TValue>>)_dictionary).Remove(item);
             if (removed)
-            {
                 SetDirty();
-            }
             return removed;
         }
 
@@ -63,9 +65,7 @@ namespace Appegy.Storage
             ThrowIfDisposed();
             var removed = _dictionary.Remove(key);
             if (removed)
-            {
                 SetDirty();
-            }
             return removed;
         }
 
@@ -81,21 +81,41 @@ namespace Appegy.Storage
 
         public ICollection<TValue> Values => _dictionary.Values;
 
-        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() => _dictionary.GetEnumerator();
+        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
+        {
+            return _dictionary.GetEnumerator();
+        }
 
         IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => Keys;
 
         IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => Values;
 
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
 
-        public bool Contains(KeyValuePair<TKey, TValue> item) => ((ICollection<KeyValuePair<TKey, TValue>>)_dictionary).Contains(item);
+        public bool Contains(KeyValuePair<TKey, TValue> item)
+        {
+            return ((ICollection<KeyValuePair<TKey, TValue>>)_dictionary).Contains(item);
+        }
 
-        public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex) => ((ICollection<KeyValuePair<TKey, TValue>>)_dictionary).CopyTo(array, arrayIndex);
+        public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
+        {
+            ((ICollection<KeyValuePair<TKey, TValue>>)_dictionary).CopyTo(array, arrayIndex);
+        }
 
-        public bool ContainsKey(TKey key) => _dictionary.ContainsKey(key);
+        public bool ContainsKey(TKey key)
+        {
+            return _dictionary.ContainsKey(key);
+        }
 
-        public bool TryGetValue(TKey key, out TValue value) => _dictionary.TryGetValue(key, out value);
+#pragma warning disable CS8767
+        public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
+        {
+            return _dictionary.TryGetValue(key, out value);
+        }
+#pragma warning restore CS8767
 
         #endregion
     }

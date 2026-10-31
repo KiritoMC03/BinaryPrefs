@@ -1,3 +1,7 @@
+#nullable enable
+
+// ReSharper disable once CheckNamespace
+
 namespace Appegy.Storage
 {
     internal interface IStorageWriter
